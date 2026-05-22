@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src http: https: data: coolapk-img:; style-src 'self' 'unsafe-inline'; font-src https:;">
+  <title>酷安</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">📱 酷安</div>
+      </div>
+      <nav class="sidebar-nav">
+        <a class="nav-item active" data-page="home">
+          <span class="nav-icon">🏠</span>
+          <span class="nav-label">首页</span>
+        </a>
+        <a class="nav-item" data-page="channels">
+          <span class="nav-icon">📡</span>
+          <span class="nav-label">频道</span>
+        </a>
+        <a class="nav-item" data-page="search" id="search-nav">
+          <span class="nav-icon">🔍</span>
+          <span class="nav-label">搜索</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <a class="nav-item" id="login-btn">
+          <span class="nav-icon">👤</span>
+          <span class="nav-label">登录</span>
+        </a>
+      </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+      <!-- 顶部栏 -->
+      <header class="topbar">
+        <div class="topbar-title" id="page-title">首页</div>
+        <div class="search-box" id="search-box" style="display:none">
+          <input type="text" id="search-input" placeholder="搜索酷安..." autocomplete="off">
+          <div class="search-suggest" id="search-suggest"></div>
+          <button id="search-btn">搜索</button>
+        </div>
+        <div class="topbar-actions">
+          <button class="icon-btn" id="theme-btn" title="切换主题">🌙</button>
+          <button class="icon-btn" id="refresh-btn" title="刷新">🔄</button>
+        </div>
+      </header>
+
+      <!-- 首页Tab栏 -->
+      <div class="home-tabs" id="home-tabs"></div>
+      <!-- 关注子分组 -->
+      <div class="follow-subtabs" id="follow-subtabs" style="display:none"></div>
+
+      <!-- 内容 -->
+      <div class="content-area" id="content-area">
+        <div class="loading">加载中...</div>
+      </div>
+    </main>
+
+    <!-- 帖子详情模态框 -->
+    <div class="modal-overlay" id="detail-modal" style="display:none">
+      <div class="modal">
+        <div class="modal-header">
+          <button class="close-btn" id="close-detail">✕</button>
+          <div class="modal-title">动态详情</div>
+        </div>
+        <div class="modal-body" id="detail-content"></div>
+      </div>
+    </div>
+
+    <!-- 登录模态框 -->
+    <div class="modal-overlay" id="login-modal" style="display:none">
+      <div class="modal login-modal">
+        <div class="modal-header">
+          <button class="close-btn" id="close-login">✕</button>
+          <div class="modal-title">登录酷安</div>
+        </div>
+        <div class="modal-body">
+          <form id="login-form">
+            <div class="form-group">
+              <label>用户名 / 手机号</label>
+              <input type="text" id="login-username" placeholder="请输入用户名或手机号" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label>密码</label>
+              <input type="password" id="login-password" placeholder="请输入密码" autocomplete="off">
+            </div>
+            <div class="login-error" id="login-error"></div>
+            <button type="submit" class="btn-primary">登录</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
