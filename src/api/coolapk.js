@@ -1,10 +1,25 @@
+
+
 const crypto = require('crypto');
 const https = require('https');
-const { HttpsProxyAgent } = require('https-proxy-agent');
 const bcrypt = require('bcryptjs');
 
-const PROXY = 'http://127.0.0.1:7897';
 const BASE_URL = 'https://api.coolapk.com';
+const ACCOUNT_URL = 'https://account.coolapk.com';
+
+// Node.js 18+ 原生 fetch，自动走系统代理（electron-store 优先读取 proxy 配置）
+function nodeFetch(url, options = {}) {
+  // 设置超时，避免永久挂起
+  const controller = new AbortController();
+  const timeout = setTimeout(() => { controller.abort(); }, 15000);
+  const opts = { ...options, signal: controller.signal };
+  return globalThis.fetch(url, opts)
+    .finally(() => clearTimeout(timeout))
+    .catch(e => {
+      if (e.name === 'AbortError') throw new Error('Request timeout (15s)');
+      throw e;
+    });
+}
 
 const CONFIG = {
   appId: 'com.coolapk.market',
@@ -42,14 +57,10 @@ function randomMac() {
   return bytes.join(':');
 }
 
-function md5(str) {
-  return crypto.createHash('md5').update(str, 'utf8').digest('hex');
-}
+const md5 = (str) => crypto.createHash('md5').update(str, 'utf8').digest('hex');
 
 // Base64 (不带 padding)
-function base64(str) {
-  return Buffer.from(str, 'utf8').toString('base64').replace(/=/g, '');
-}
+const base64 = (str) => Buffer.from(str, 'utf8').toString('base64').replace(/=/g, '');
 
 // X-App-Token V2 生成
 function generateAppTokenV2(deviceCode) {
@@ -63,7 +74,6 @@ function generateAppTokenV2(deviceCode) {
   const md5Base64Token = md5(base64Token);
   const md5Token = md5(token);
 
-  // bcrypt salt: "$2y$10${base64Timestamp}/{md5Token}" 前31个字符 + "u"
   const saltPrefix = `$2y$10$${base64Timestamp}/${md5Token}`;
   const bcryptSalt = saltPrefix.substring(0, 31) + 'u';
 
@@ -85,8 +95,8 @@ function generateAppTokenV1(deviceCode) {
 
 let _deviceCode = '';
 
-function buildHeaders() {
-  return {
+function buildHeaders(extra = {}) {
+  const headers = {
     'User-Agent': CONFIG.userAgent,
     'X-Requested-With': 'XMLHttpRequest',
     'X-App-Id': CONFIG.appId,
@@ -101,10 +111,12 @@ function buildHeaders() {
     'X-App-Channel': 'coolapk',
     'X-App-Mode': 'universal',
     'X-App-Supported': CONFIG.appCode,
+    ...extra,
   };
+  return headers;
 }
 
-function request(path, method = 'GET', body = null) {
+function request(path, method = 'GET', body = null, useCookies = true) {
   return new Promise((resolve, reject) => {
     const url = new URL(BASE_URL + path);
     const headers = buildHeaders();
@@ -115,15 +127,33 @@ function request(path, method = 'GET', body = null) {
       headers['Content-Length'] = Buffer.byteLength(body);
     }
 
-    const agent = new HttpsProxyAgent(PROXY, { rejectUnauthorized: false });
+    // 登录状态：带 token cookie
+    // 登录状态：带 token 和 SESSID cookie
+    if (useCookies && this && this.cookies) {
+      const parts = [];
+      if (this.cookies.token) parts.push(`token=${this.cookies.token}`);
+      if (this.cookies.SESSID) parts.push(`SESSID=${this.cookies.SESSID}`);
+      if (this.cookies.uid) parts.push(`uid=${this.cookies.uid}`);
+      if (this.cookies.username) parts.push(`username=${this.cookies.username}`);
+      if (parts.length > 0) headers['Cookie'] = parts.join('; ');
+    }
 
-    const req = https.request(url.href, { method, headers, agent }, (res) => {
+    const req = https.request(url.href, { method, headers }, (res) => {
+      // 记录 Set-Cookie
+      const setCookie = res.headers['set-cookie'];
+      if (setCookie && this && this.cookies) {
+        setCookie.forEach(c => {
+          const match = c.match(/^token=([^;]+)/);
+          if (match) this.cookies.token = match[1];
+        });
+      }
+
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           const loc = new URL(res.headers.location, BASE_URL);
-          resolve(request(loc.pathname + loc.search, method, body));
+          resolve(request.call(this, loc.pathname + loc.search, method, body, useCookies));
           return;
         }
         try {
@@ -142,50 +172,342 @@ function request(path, method = 'GET', body = null) {
 }
 
 class CoolapkAPI {
-  constructor() {
+  constructor(store = null) {
     _deviceCode = createDeviceCode();
     console.log('Device code:', _deviceCode);
+    this.store = store;
     this.cookies = {};
+
+    // 启动时加载已保存的登录状态
+    if (store) {
+      const saved = store.get('user', null);
+      if (saved && (saved.token || saved.SESSID)) {
+        this.cookies = {
+          token: saved.token || '',
+          SESSID: saved.SESSID || '',
+          username: saved.username || '',
+          uid: saved.uid || '',
+        };
+        console.log('Restored login session:', saved.username);
+      }
+    }
   }
 
-  setCookies(token, username, uid) {
-    this.cookies = { token, username, uid };
+  isLoggedIn() {
+    return !!(this.cookies && (this.cookies.token || this.cookies.SESSID));
+  }
+
+  getUser() {
+    if (!this.cookies || (!this.cookies.token && !this.cookies.SESSID)) return null;
+    return { token: this.cookies.token, SESSID: this.cookies.SESSID, username: this.cookies.username, uid: this.cookies.uid };
+  }
+
+  // ===== 登录 API (account.coolapk.com) =====
+
+  // GET 获取 requestHash + requireCaptcha
+  async _fetchRequestHash() {
+    const url = new URL('/auth/loginByCoolapk', ACCOUNT_URL).href;
+
+    try {
+      // 用浏览器 UA GET 登录页 HTML，从中提取 requestHash 和验证码
+      // APP UA + X-Requested-With 返回空 body，必须用浏览器方式访问
+      // 使用 https.request 代替 nodeFetch，确保 Cookie 正确获取
+      const html = await new Promise((resolve, reject) => {
+        const opts = {
+          hostname: 'account.coolapk.com',
+          path: '/auth/loginByCoolapk',
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Pixel 6) AppleWebKit/537.36 Chrome/122.0.0.0 Mobile Safari/537.36',
+          },
+        };
+        const req = https.request(opts, res => {
+          // 保存 Set-Cookie
+          const cookies = res.headers['set-cookie'] || [];
+          for (const cookieStr of cookies) {
+            const m = cookieStr.match(/SESSID=([^;]+)/);
+            if (m) this.cookies.SESSID = m[1];
+            const f = cookieStr.match(/forward=([^;]+)/);
+            if (f) this.cookies.forward = f[1];
+          }
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => resolve(data));
+        });
+        req.on('error', reject);
+        req.end();
+      });
+
+      console.error('[FetchHash] html length:', html.length, 'SESSID:', this.cookies.SESSID);
+      if (!html) throw new Error('Empty HTML response');
+
+      // 提取 requestHash: "requestHash : 'xxx'" 格式
+      const hashMatch = html.match(/requestHash\s*:\s*'([^']+)'/);
+      if (!hashMatch) throw new Error('requestHash not found in login page');
+      const requestHash = hashMatch[1];
+
+      // 验证码需要单独请求 /auth/showCaptchaImage（HTML内嵌的是1x1占位图）
+      const captchaImage = await this._fetchCaptchaImage();
+
+      return { requestHash, requireCaptcha: !!captchaImage, captchaImage };
+    } catch (e) {
+      throw new Error('Failed to fetch requestHash: ' + e.message);
+    }
+  }
+
+  // 请求验证码图片（返回 base64 data URL）
+  async _fetchCaptchaImage() {
+    if (!this.cookies.SESSID) return null;
+    return new Promise((resolve, reject) => {
+      const opts = {
+        hostname: 'account.coolapk.com',
+        path: `/auth/showCaptchaImage?${Date.now()}`,
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Pixel 6) AppleWebKit/537.36 Chrome/122.0.0.0 Mobile Safari/537.36',
+          'Referer': 'https://account.coolapk.com/auth/loginByCoolapk',
+          'Cookie': `SESSID=${this.cookies.SESSID}${this.cookies.forward ? '; forward=' + this.cookies.forward : ''}${this.cookies.displayVersion ? '; displayVersion=' + this.cookies.displayVersion : ''}`,
+        },
+      };
+      const req = https.request(opts, res => {
+        const chunks = [];
+        res.on('data', chunk => chunks.push(chunk));
+        res.on('end', () => {
+          const buf = Buffer.concat(chunks);
+          const ct = res.headers['content-type'] || 'image/jpeg';
+          resolve(`data:${ct};base64,${buf.toString('base64')}`);
+        });
+      });
+      req.on('error', () => resolve(null));
+      req.end();
+    });
+  }
+
+  // 刷新验证码（重新请求验证码图片）
+  async fetchCaptchaImage() {
+    try {
+      const captchaImage = await this._fetchCaptchaImage();
+      return { captchaImage };
+    } catch {
+      return null;
+    }
+  }
+
+  // POST 登录（账号密码 / 手机验证码）
+  async _postLogin(login, password, requestHash, captcha = '', loginType = 'password') {
+    const randomNum = Math.floor(Math.random() * 9999999).toString();
+    let formBody = `submit=1&requestHash=${encodeURIComponent(requestHash)}&login=${encodeURIComponent(login)}&randomNumber=${randomNum}`;
+    if (loginType === 'sms') {
+      formBody += `&type=sms`;
+    } else {
+      formBody += `&password=${encodeURIComponent(password)}`;
+    }
+    if (captcha) formBody += `&captcha=${encodeURIComponent(captcha)}`;
+
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36',
+      'X-Requested-With': 'XMLHttpRequest',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Referer': 'https://account.coolapk.com/auth/loginByCoolapk',
+      'Cookie': this.cookies.SESSID ? `SESSID=${this.cookies.SESSID}` : '',
+    };
+
+    const result = await this._httpsPost('account.coolapk.com', '/auth/loginByCoolapk', formBody, headers);
+    console.error('[Login POST] result:', JSON.stringify(result).substring(0, 300));
+    return result;
+  }
+
+  // 账号密码登录（完整流程）
+  async login(loginValue, password, captcha = '', cachedRequestHash = '', loginType = 'password') {
+    try {
+      let requestHash = cachedRequestHash;
+
+      // 账号密码登录必须获取新的 SESSID，避免被之前的短信流程污染会话状态
+      // 短信登录(SMS)可以复用 cachedRequestHash，因为本身就是同一个会话
+      if (!requestHash || loginType === 'password') {
+        const hashData = await this._fetchRequestHash();
+        if (!hashData.requestHash) {
+          return { code: -1, message: '无法获取登录请求标识，请稍后重试' };
+        }
+        requestHash = hashData.requestHash;
+        // 如果需要验证码但没提供，返回需要验证码
+        if (hashData.requireCaptcha && !captcha) {
+          return { code: 2, message: '需要验证码', requestHash: hashData.requestHash, captchaImage: hashData.captchaImage };
+        }
+      }
+
+      // Step 2: POST 登录（使用缓存的或新的 requestHash + 已保存的 SESSID）
+      const result = await this._postLogin(loginValue, password, requestHash, captcha, loginType);
+      console.error('[Login] POST result:', JSON.stringify(result).substring(0, 300));
+
+      // _httpsPost 返回错误或非JSON
+      if (result && result.error) {
+        return { code: -1, message: '网络错误：' + result.error };
+      } else if (result && result.raw) {
+        return { code: -1, message: '服务器返回非JSON响应' };
+      }
+
+      // 登录被拦截，需要验证码
+      if (result && result.requireCaptcha) {
+        return { code: 2, message: '请输入验证码', requestHash: hashData.requestHash };
+      }
+
+      // result 结构: { SESSID, token, uid, username, userAvatar, ... }
+      // 302 重定向时 result 来自 _httpsPost 的 302 处理，已包含 cookies
+      if (result && (result.SESSID || result.token)) {
+        // 合并 cookies（保留 _httpsPost 中已提取的值）
+        this.cookies = {
+          ...this.cookies,
+          token: result.token || this.cookies.token || '',
+          SESSID: result.SESSID || this.cookies.SESSID || '',
+          username: result.username || this.cookies.username || loginValue,
+          uid: result.uid || this.cookies.uid || '',
+        };
+
+        // 持久化到 store
+        if (this.store) {
+          this.store.set('user', { ...this.cookies });
+        }
+
+        return { data: result, message: '登录成功' };
+      } else if (result && result.message) {
+        return { code: result.code || -1, message: result.message };
+      } else {
+        return { code: -1, message: '登录失败，未知错误' };
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      return { code: -1, message: '网络错误：' + err.message };
+    }
+  }
+
+  // 验证登录状态（调用 /v6/account/checkLoginInfo）
+  async checkLoginInfo() {
+    return request.call(this, '/v6/account/checkLoginInfo');
+  }
+
+  async logout() {
+    this.cookies = {};
+    if (this.store) {
+      this.store.delete('user');
+    }
+    return { data: 1 };
+  }
+
+  // 发送短信验证码（手机验证码登录用）
+  // 酷安流程：先 checkAdmin 检查手机号 → 再 sms 发送验证码
+  async sendSms(phone, cachedRequestHash = '') {
+    try {
+      let requestHash = cachedRequestHash;
+      if (!requestHash) {
+        const hashData = await this._fetchRequestHash();
+        if (!hashData.requestHash) {
+          return { code: -1, message: '无法获取请求标识' };
+        }
+        requestHash = hashData.requestHash;
+      }
+      const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Referer': 'https://account.coolapk.com/auth/loginByCoolapk',
+        'Cookie': this.cookies.SESSID ? `SESSID=${this.cookies.SESSID}` : '',
+      };
+
+      // Step 1: checkAdmin
+      const checkBody = `submit=1&requestHash=${encodeURIComponent(requestHash)}&login=${encodeURIComponent(phone)}&type=checkAdmin`;
+      const checkResult = await this._httpsPost('account.coolapk.com', '/auth/loginByCoolapk', checkBody, headers);
+      if (checkResult.status !== 1) {
+        // 非短信登录用户或出错
+        return { code: -1, message: checkResult.message || '该账号不支持短信登录' };
+      }
+
+      // Step 2: 发送短信
+      const formBody = `submit=1&requestHash=${encodeURIComponent(requestHash)}&login=${encodeURIComponent(phone)}&type=sms`;
+      return this._httpsPost('account.coolapk.com', '/auth/loginByCoolapk', formBody, headers);
+    } catch (err) {
+      return { code: -1, message: err.message };
+    }
   }
 
   async getFeed(page = 1) {
-    return request(`/v6/main/indexV8?page=${page}`);
+    return request.call(this, `/v6/main/indexV8?page=${page}`);
+  }
+
+  // HTTPS POST 辅助方法
+  _httpsPost(hostname, path, body, headers) {
+    return new Promise((resolve, reject) => {
+      const opts = {
+        hostname,
+        path,
+        method: 'POST',
+        headers: { ...headers, 'Content-Length': Buffer.byteLength(body) },
+      };
+      const req = https.request(opts, res => {
+        let data = '';
+        // 保存 set-cookie
+        const setCookies = res.headers['set-cookie'] || [];
+        for (const c of setCookies) {
+          const m1 = c.match(/SESSID=([^;]+)/);
+          if (m1) this.cookies.SESSID = m1[1];
+          const m2 = c.match(/token=([^;]+)/);
+          if (m2) this.cookies.token = m2[1];
+          const m3 = c.match(/uid=([^;]+)/);
+          if (m3) this.cookies.uid = m3[1];
+          const m4 = c.match(/username=([^;]+)/);
+          if (m4) this.cookies.username = decodeURIComponent(m4[1]);
+        }
+
+        // 302 重定向 = 登录成功
+        if (res.statusCode === 302 || res.statusCode === 301) {
+          const location = res.headers.location || '';
+          console.error('[HTTPS POST] 302 redirect:', location, 'cookies:', JSON.stringify(this.cookies));
+          // 从 Location 提取参数或直接返回成功
+          resolve({
+            status: 1,
+            message: '登录成功',
+            redirectUrl: location,
+            SESSID: this.cookies.SESSID,
+            token: this.cookies.token,
+            uid: this.cookies.uid,
+            username: this.cookies.username,
+          });
+          return;
+        }
+
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try { resolve(JSON.parse(data)); }
+          catch { resolve({ raw: data }); }
+        });
+      });
+      req.on('error', err => resolve({ error: err.message }));
+      req.write(body);
+      req.end();
+    });
   }
 
   async getFeedPage({ url, page = 1, firstItem, lastItem }) {
     let path = `/v6/page/dataList?url=${encodeURIComponent(url)}&page=${page}`;
     if (firstItem) path += `&firstItem=${firstItem}`;
     if (lastItem) path += `&lastItem=${lastItem}`;
-    return request(path);
+    return request.call(this, path);
   }
 
   async getInit() {
-    return request('/v6/main/init');
+    return request.call(this, '/v6/main/init');
   }
 
   async getHeadline(page = 1) {
-    return request(`/v6/main/headline?page=${page}`);
+    return request.call(this, `/v6/main/headline?page=${page}`);
   }
 
   async getFeedDetail(id) {
-    return request(`/v6/feed/detail?id=${id}`);
+    return request.call(this, `/v6/feed/detail?id=${id}`);
   }
 
   async getReplyList(id, page = 1) {
-    return request(`/v6/feed/replyList?id=${id}&page=${page}&discussMode=1&feedType=feed`);
-  }
-
-  async login(username, password) {
-    const formBody = `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-    const result = await request('/v6/user/login', 'POST', formBody);
-    if (result.data) {
-      this.setCookies(result.data.token, result.data.username, result.data.uid);
-    }
-    return result;
+    return request.call(this, `/v6/feed/replyList?id=${id}&page=${page}&discussMode=1&feedType=feed`);
   }
 
   async search(keyword, page = 1, type = 'feed', sort = 'default') {
@@ -195,23 +517,23 @@ class CoolapkAPI {
     if (t === 'feed') {
       path += `&feedType=all&sort=${sort}`;
     }
-    return request(path);
+    return request.call(this, path);
   }
 
   async searchSuggest(keyword) {
-    return request(`/v6/search/suggestSearchWordsNew?searchValue=${encodeURIComponent(keyword)}`);
+    return request.call(this, `/v6/search/suggestSearchWordsNew?searchValue=${encodeURIComponent(keyword)}`);
   }
 
   async fetch(path) {
-    return request(path);
+    return request.call(this, path);
   }
 
   async getTopicDetail(tag) {
-    return request(`/v6/topic/newTagDetail?tag=${encodeURIComponent(tag)}`);
+    return request.call(this, `/v6/topic/newTagDetail?tag=${encodeURIComponent(tag)}`);
   }
 
   async getTopicFeedList(tag, page = 1, listType = 'lastupdate_desc') {
-    return request(`/v6/topic/tagFeedList?tag=${encodeURIComponent(tag)}&listType=${listType}&page=${page}`);
+    return request.call(this, `/v6/topic/tagFeedList?tag=${encodeURIComponent(tag)}&listType=${listType}&page=${page}`);
   }
 }
 

@@ -65,13 +65,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.target === $('#detail-modal')) $('#detail-modal').style.display = 'none';
   });
 
-  // 登录
-  $('#login-btn').addEventListener('click', () => $('#login-modal').style.display = 'flex');
+  // 登录/用户按钮
+  $('#login-btn').addEventListener('click', () => {
+    $('#login-modal').style.display = 'flex';
+  });
   $('#close-login').addEventListener('click', () => $('#login-modal').style.display = 'none');
   $('#login-modal').addEventListener('click', e => {
     if (e.target === $('#login-modal')) $('#login-modal').style.display = 'none';
   });
-  $('#login-form').addEventListener('submit', doLogin);
+  // WebView 登录（打开酷安官方登录页）
+  $('#web-login-btn').addEventListener('click', async () => {
+    $('#login-error').textContent = '';
+    const btn = $('#web-login-btn');
+    btn.disabled = true;
+    btn.textContent = '打开中...';
+    try {
+      const res = await window.kuan.webLogin();
+      if (res && res.code === 0) {
+        $('#login-modal').style.display = 'none';
+        updateLoginUI(true);
+        showToast('登录成功！');
+      } else {
+        $('#login-error').textContent = res?.message || '登录失败';
+      }
+    } catch (err) {
+      $('#login-error').textContent = '登录出错：' + err.message;
+    }
+    btn.disabled = false;
+    btn.textContent = '🌐 打开登录页面';
+  });
+
+  // 检查登录状态
+  await checkLoginState();
 
   // 加载首页
   await initHomePage();
@@ -1379,37 +1404,57 @@ async function loadSubTabContent(container, url, tabEl) {
   }
 }
 
-// ===== 登录 =====
-async function doLogin(e) {
-  e.preventDefault();
-  const username = $('#login-username').value.trim();
-  const password = $('#login-password').value;
-  if (!username || !password) {
-    $('#login-error').textContent = '请填写用户名和密码';
-    return;
-  }
-
-  $('#login-error').textContent = '';
-  const submitBtn = $('#login-form button');
-  submitBtn.disabled = true;
-  submitBtn.textContent = '登录中...';
-
+// ===== 检查登录状态 =====
+async function checkLoginState() {
   try {
-    const res = await window.kuan.login(username, password);
-    if (res.data) {
-      $('#login-modal').style.display = 'none';
-      $('#login-btn').querySelector('.nav-label').textContent = res.data.username || username;
-      showToast('登录成功！');
-      initHomePage();
-    } else {
-      $('#login-error').textContent = res.message || '登录失败';
+    const user = await window.kuan.getUser();
+    if (user && user.username) {
+      updateLoginUI(user);
     }
-  } catch (err) {
-    $('#login-error').textContent = '网络错误';
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = '登录';
+  } catch (e) {
+    console.error('checkLoginState error:', e);
   }
+}
+
+function updateLoginUI(user) {
+  const btn = $('#login-btn');
+  if (!btn) return;
+  const label = btn.querySelector('.nav-label');
+  const icon = btn.querySelector('.nav-icon');
+  if (label) {
+    label.textContent = user.username;
+    label.title = '已登录 · 点击退出';
+  }
+  if (icon) icon.textContent = '👤';
+  btn.dataset.loggedIn = 'true';
+  btn.onclick = () => {
+    if (confirm('确定退出登录？')) {
+      doLogout();
+    }
+  };
+}
+
+function resetLoginUI() {
+  const btn = $('#login-btn');
+  if (!btn) return;
+  const label = btn.querySelector('.nav-label');
+  const icon = btn.querySelector('.nav-icon');
+  if (label) {
+    label.textContent = '登录';
+    label.title = '登录';
+  }
+  if (icon) icon.textContent = '🔑';
+  btn.dataset.loggedIn = 'false';
+  btn.onclick = () => { $('#login-modal').style.display = 'flex'; };
+}
+
+async function doLogout() {
+  try {
+    await window.kuan.logout();
+  } catch (e) {}
+  resetLoginUI();
+  showToast('已退出登录');
+  await initHomePage();
 }
 
 // ===== Lightbox 图片预览 =====

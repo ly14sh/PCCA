@@ -1,6 +1,6 @@
 {
   "name": "pcca",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "PCCA - 酷安第三方桌面客户端",
   "main": "main.js",
   "scripts": {
@@ -11,16 +11,32 @@
   "build": {
     "appId": "com.pcca.desktop",
     "productName": "PCCA",
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
     "directories": {
       "output": "dist"
     },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "compression": "maximum",
     "win": {
-      "target": "nsis",
-      "icon": "assets/icon.png"
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+    "portable": {
+      "artifactName": "PCCA-Portable-${version}.${ext}"
     }
   },
   "dependencies": {
