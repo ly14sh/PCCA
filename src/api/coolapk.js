@@ -386,10 +386,24 @@ class CoolapkAPI {
     return request.call(this, '/v6/account/checkLoginInfo');
   }
 
-  async logout() {
+  async logout(session) {
     this.cookies = {};
     if (this.store) {
+      this.store.delete('coolapk_cookies');
       this.store.delete('user');
+    }
+    // 清除 Electron session 中的 Cookie
+    if (session) {
+      try {
+        const cookies = await session.cookies.get({ domain: '.coolapk.com' });
+        for (const c of cookies) {
+          const url = `http${c.secure ? 's' : ''}://${c.domain.replace(/^\./, '')}${c.path}`;
+          await session.cookies.remove(url, c.name);
+        }
+        console.log('[Logout] Cleared', cookies.length, 'coolapk cookies');
+      } catch (e) {
+        console.error('[Logout] Clear cookies error:', e.message);
+      }
     }
     return { data: 1 };
   }

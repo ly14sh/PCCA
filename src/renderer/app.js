@@ -65,10 +65,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.target === $('#detail-modal')) $('#detail-modal').style.display = 'none';
   });
 
-  // 登录/用户按钮
-  $('#login-btn').addEventListener('click', () => {
-    $('#login-modal').style.display = 'flex';
-  });
+  // 登录/用户按钮 - 统一处理
+  $('#login-btn').addEventListener('click', handleLoginBtnClick);
   $('#close-login').addEventListener('click', () => $('#login-modal').style.display = 'none');
   $('#login-modal').addEventListener('click', e => {
     if (e.target === $('#login-modal')) $('#login-modal').style.display = 'none';
@@ -83,7 +81,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       const res = await window.kuan.webLogin();
       if (res && res.code === 0) {
         $('#login-modal').style.display = 'none';
-        updateLoginUI(true);
+        // 重新获取用户信息
+        const user = await window.kuan.getUser();
+        if (user && user.username) {
+          updateLoginUI(user);
+        }
         showToast('登录成功！');
       } else {
         $('#login-error').textContent = res?.message || '登录失败';
@@ -1410,9 +1412,28 @@ async function checkLoginState() {
     const user = await window.kuan.getUser();
     if (user && user.username) {
       updateLoginUI(user);
+    } else {
+      resetLoginUI();
     }
   } catch (e) {
     console.error('checkLoginState error:', e);
+    resetLoginUI();
+  }
+}
+
+// 统一的登录按钮点击处理
+function handleLoginBtnClick() {
+  const btn = $('#login-btn');
+  const isLoggedIn = btn.dataset.loggedIn === 'true';
+  
+  if (isLoggedIn) {
+    // 已登录 - 确认退出
+    if (confirm('确定退出登录？')) {
+      doLogout();
+    }
+  } else {
+    // 未登录 - 打开登录弹窗
+    $('#login-modal').style.display = 'flex';
   }
 }
 
@@ -1427,11 +1448,6 @@ function updateLoginUI(user) {
   }
   if (icon) icon.textContent = '👤';
   btn.dataset.loggedIn = 'true';
-  btn.onclick = () => {
-    if (confirm('确定退出登录？')) {
-      doLogout();
-    }
-  };
 }
 
 function resetLoginUI() {
@@ -1445,7 +1461,6 @@ function resetLoginUI() {
   }
   if (icon) icon.textContent = '🔑';
   btn.dataset.loggedIn = 'false';
-  btn.onclick = () => { $('#login-modal').style.display = 'flex'; };
 }
 
 async function doLogout() {

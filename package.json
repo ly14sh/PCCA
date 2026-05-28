@@ -1,6 +1,6 @@
 {
   "name": "pcca",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "PCCA - 酷安第三方桌面客户端",
   "main": "main.js",
   "scripts": {

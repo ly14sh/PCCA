@@ -2,8 +2,6 @@ const { app, BrowserWindow, ipcMain, session, protocol, net } = require('electro
 const path = require('path');
 const Store = require('electron-store');
 
-const store = new Store();
-
 // 不设置代理 — account.coolapk.com 直连即可（Python 已验证）
 delete process.env.HTTPS_PROXY;
 delete process.env.HTTP_PROXY;
@@ -12,7 +10,41 @@ console.log('[Proxy] 已禁用代理，使用直连');
 const { CoolapkAPI } = require('./src/api/coolapk');
 
 let mainWindow;
-const api = new CoolapkAPI(store);
+let store;
+let api;
+
+// ===== 应用启动时恢复 Session Cookie =====
+async function restoreSessionCookies() {
+  const saved = store.get('user');
+  if (saved && (saved.token || saved.SESSID)) {
+    const ses = session.defaultSession;
+    const domain = '.coolapk.com';
+    
+    // 写入必要的 Cookie 到 Session
+    const cookiesToSet = [];
+    if (saved.token) {
+      cookiesToSet.push({ url: 'https://coolapk.com', name: 'token', value: saved.token, domain: domain, path: '/', secure: true, httpOnly: false });
+    }
+    if (saved.uid) {
+      cookiesToSet.push({ url: 'https://coolapk.com', name: 'uid', value: saved.uid, domain: domain, path: '/', secure: true, httpOnly: false });
+    }
+    if (saved.username) {
+      cookiesToSet.push({ url: 'https://coolapk.com', name: 'username', value: saved.username, domain: domain, path: '/', secure: true, httpOnly: false });
+    }
+    if (saved.SESSID) {
+      cookiesToSet.push({ url: 'https://coolapk.com', name: 'SESSID', value: saved.SESSID, domain: domain, path: '/', secure: true, httpOnly: true });
+    }
+    
+    for (const c of cookiesToSet) {
+      try {
+        await ses.cookies.set(c);
+      } catch (e) {
+        console.error('[Session] Failed to set cookie', c.name, e.message);
+      }
+    }
+    console.log('[Session] Restored', cookiesToSet.length, 'cookies for user:', saved.username);
+  }
+}
 
 // ===== IPC Handlers =====
 ipcMain.handle('api:getFeed', async (_, params) => {
@@ -44,7 +76,8 @@ ipcMain.handle('api:checkLoginInfo', async () => {
 });
 
 ipcMain.handle('api:logout', async () => {
-  return await api.logout();
+  const ses = session.defaultSession;
+  return await api.logout(ses);
 });
 
 ipcMain.handle('api:getUser', () => {
@@ -94,6 +127,8 @@ ipcMain.handle('api:fetchCaptchaImage', async () => {
 // WebView 登录：打开酷安登录页，登录成功后从 Cookie 提取认证信息
 ipcMain.handle('api:webLogin', async () => {
   return new Promise((resolve, reject) => {
+    let resolved = false; // 防止重复 resolve
+    
     const loginWin = new BrowserWindow({
       width: 420,
       height: 700,
@@ -108,40 +143,46 @@ ipcMain.handle('api:webLogin', async () => {
 
     loginWin.loadURL('https://account.coolapk.com/auth/login?type=coolapk');
 
-    // 监听页面跳转 — 登录成功后重定向到 www.coolapk.com
-    loginWin.webContents.on('will-redirect', (event, url) => {
-      console.log('[WebLogin] redirect:', url);
+    const handleLoginSuccess = (event, url) => {
+      console.log('[WebLogin] redirect/navigate:', url);
       if (url.includes('www.coolapk.com') || url.includes('coolapk.com/home')) {
         event.preventDefault();
-        extractLoginCookies(loginWin, resolve);
+        if (!resolved) {
+          resolved = true;
+          extractLoginCookies(loginWin, resolve);
+        }
       }
-    });
+    };
 
-    loginWin.webContents.on('will-navigate', (event, url) => {
-      console.log('[WebLogin] navigate:', url);
-      if (url.includes('www.coolapk.com') || url.includes('coolapk.com/home')) {
-        event.preventDefault();
-        extractLoginCookies(loginWin, resolve);
-      }
-    });
+    loginWin.webContents.on('will-redirect', handleLoginSuccess);
+    loginWin.webContents.on('will-navigate', handleLoginSuccess);
 
-    // 某些情况下登录成功不跳转，而是通过 Cookie 变化感知
-    // 定期检查 Cookie 中是否已有 token
+    // Cookie 检查定时器
     const cookieCheck = setInterval(async () => {
+      if (resolved) {
+        clearInterval(cookieCheck);
+        return;
+      }
       try {
         const cookies = await loginWin.webContents.session.cookies.get({ domain: '.coolapk.com' });
         const tokenCookie = cookies.find(c => c.name === 'token');
         const uidCookie = cookies.find(c => c.name === 'uid');
         if (tokenCookie && uidCookie) {
           clearInterval(cookieCheck);
-          extractLoginCookies(loginWin, resolve);
+          if (!resolved) {
+            resolved = true;
+            extractLoginCookies(loginWin, resolve);
+          }
         }
       } catch (e) { /* ignore */ }
     }, 1000);
 
     loginWin.on('closed', () => {
       clearInterval(cookieCheck);
-      resolve({ code: -1, message: '登录窗口已关闭' });
+      if (!resolved) {
+        resolved = true;
+        resolve({ code: -1, message: '登录窗口已关闭' });
+      }
     });
   });
 });
@@ -163,8 +204,9 @@ function extractLoginCookies(loginWin, resolve) {
         username: result.username || '',
         SESSID: result.SESSID || '',
       };
+      // 统一用 'user' 键存储，与 API 登录保持一致
       if (api.store) {
-        api.store.set('coolapk_cookies', api.cookies);
+        api.store.set('user', { ...api.cookies });
       }
       loginWin.close();
       resolve({ code: 0, message: '登录成功', data: api.cookies });
@@ -201,7 +243,17 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // 初始化存储
+  store = new Store({
+    name: 'config',
+    cwd: app.getPath('userData')
+  });
+  api = new CoolapkAPI(store);
+  
+  // 先恢复 Session Cookie
+  await restoreSessionCookies();
+  
   // 注册自定义协议：coolapk-img:// 代理图片请求
   protocol.handle('coolapk-img', (request) => {
     const realUrl = request.url.replace('coolapk-img://', 'https://');
