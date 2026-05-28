@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, session, protocol, net } = require('electron');
+const { app, BrowserWindow, ipcMain, session, protocol, net, shell } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 
@@ -108,6 +108,42 @@ ipcMain.handle('api:getTopicFeedList', async (_, tag, page, listType) => {
   return api.getTopicFeedList(tag, page, listType);
 });
 
+ipcMain.handle('api:getUserSpace', async (_, uid) => {
+  return api.getUserSpace(uid);
+});
+
+ipcMain.handle('api:getUserFeedList', async (_, uid, page) => {
+  return api.getUserFeedList(uid, page);
+});
+
+ipcMain.handle('api:getUserReplyList', async (_, uid, page) => {
+  return api.getUserReplyList(uid, page);
+});
+
+ipcMain.handle('api:getMyFeedList', async (_, page) => {
+  return api.getMyFeedList(page);
+});
+
+ipcMain.handle('api:getFollowFeedList', async (_, page) => {
+  return api.getFollowFeedList(page);
+});
+
+ipcMain.handle('api:getNotificationList', async (_, page) => {
+  return api.getNotificationList(page);
+});
+
+ipcMain.handle('api:getMessageList', async (_, page) => {
+  return api.getMessageList(page);
+});
+
+ipcMain.handle('api:getUnreadCount', async () => {
+  return api.getUnreadCount();
+});
+
+ipcMain.handle('api:readNotification', async (_, id) => {
+  return api.readNotification(id);
+});
+
 ipcMain.handle('api:getInit', async () => {
   return api.getInit();
 });
@@ -122,6 +158,55 @@ ipcMain.handle('api:fetch', async (_, path) => {
 
 ipcMain.handle('api:fetchCaptchaImage', async () => {
   return api.fetchCaptchaImage();
+});
+
+// ===== 动态操作 IPC =====
+ipcMain.handle('api:likeFeed', async (_, id) => {
+  return api.likeFeed(id);
+});
+
+ipcMain.handle('api:unlikeFeed', async (_, id) => {
+  return api.unlikeFeed(id);
+});
+
+ipcMain.handle('api:likeReply', async (_, id) => {
+  return api.likeReply(id);
+});
+
+ipcMain.handle('api:unlikeReply', async (_, id) => {
+  return api.unlikeReply(id);
+});
+
+ipcMain.handle('api:followUser', async (_, uid) => {
+  return api.followUser(uid);
+});
+
+ipcMain.handle('api:unfollowUser', async (_, uid) => {
+  return api.unfollowUser(uid);
+});
+
+ipcMain.handle('api:favoriteFeed', async (_, id) => {
+  return api.favoriteFeed(id);
+});
+
+ipcMain.handle('api:reportFeed', async (_, id, reason) => {
+  return api.reportFeed(id, reason);
+});
+
+ipcMain.handle('api:deleteFeed', async (_, id) => {
+  return api.deleteFeed(id);
+});
+
+ipcMain.handle('api:postReply', async (_, id, message, type) => {
+  return api.postReply(id, message, type);
+});
+
+ipcMain.handle('api:getReplyListSorted', async (_, id, page, listType) => {
+  return api.getReplyListSorted(id, page, listType);
+});
+
+ipcMain.handle('api:createFeed', async (_, data) => {
+  return api.createFeed(data);
 });
 
 // WebView 登录：打开酷安登录页，登录成功后从 Cookie 提取认证信息
@@ -224,6 +309,17 @@ function extractLoginCookies(loginWin, resolve) {
 ipcMain.handle('store:get', (_, key) => store.get(key));
 ipcMain.handle('store:set', (_, key, val) => store.set(key, val));
 
+ipcMain.handle('clearCache', async () => {
+  const session = mainWindow.webContents.session;
+  await session.clearCache();
+  await session.clearStorageData();
+  return { success: true };
+});
+
+ipcMain.handle('openExternal', async (_, url) => {
+  shell.openExternal(url);
+});
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -236,6 +332,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      webviewTag: true,
     },
   });
   mainWindow.setMenuBarVisibility(false);

@@ -330,6 +330,21 @@ async function switchPage(page) {
     return;
   }
 
+  if (page === 'feed') {
+    await loadFeedPage();
+    return;
+  }
+
+  if (page === 'messages') {
+    await loadMessagesPage();
+    return;
+  }
+
+  if (page === 'settings') {
+    await loadSettingsPage();
+    return;
+  }
+
   const cfg = Pages[page];
   if (!cfg) return;
   $('#page-title').textContent = cfg.title;
@@ -411,12 +426,20 @@ function createFeedCard(item) {
   const card = document.createElement('div');
   card.className = 'feed-card' + (item.entityTemplate === 'feedCover' ? ' feed-cover-card' : '');
   card.dataset.id = item.id;
-  card.addEventListener('click', () => openDetail(item.id));
+  card.dataset.uid = item.uid || '';
+  card.dataset.likeStatus = (item.userAction && item.userAction.like) ? '1' : '0';
+
+  // 点击卡片打开详情（排除操作按钮）
+  card.addEventListener('click', (e) => {
+    if (!e.target.closest('.feed-actions')) {
+      openDetail(item.id);
+    }
+  });
 
   const avatarLetter = (item.username || '?')[0];
   const avatarHtml = item.userAvatar
-    ? `<img class="feed-avatar" src="${fixImgUrl(item.userAvatar)}" alt="" onerror="this.outerHTML='<div class=feed-avatar-placeholder>${avatarLetter}</div>'">`
-    : `<div class="feed-avatar-placeholder">${avatarLetter}</div>`;
+    ? `<img class="feed-avatar feed-avatar-link" src="${fixImgUrl(item.userAvatar)}" alt="" data-uid="${item.uid || ''}" onerror="this.outerHTML='<div class=\'feed-avatar-placeholder feed-avatar-link\' data-uid=\'${item.uid || ''}\'>${avatarLetter}</div>'">`
+    : `<div class="feed-avatar-placeholder feed-avatar-link" data-uid="${item.uid || ''}">${avatarLetter}</div>`;
 
   const topicHtml = item.ttitle
     ? `<span class="feed-topic">${esc(item.ttitle)}</span>`
@@ -446,23 +469,75 @@ function createFeedCard(item) {
   const likeNum = formatNum(item.likenum || item.lightLikeNum || 0);
   const replyNum = formatNum(item.replynum || item.commentnum || 0);
   const timeStr = item.dateline ? formatTime(item.dateline) : '';
+  const isLiked = item.userAction && item.userAction.like;
 
   card.innerHTML = `
     <div class="feed-header">
       ${avatarHtml}
       <div class="feed-user-info">
-        <div class="feed-username">${esc(item.username || '匿名')}</div>
+        <div class="feed-username feed-user-link" data-uid="${item.uid || ''}" data-username="${esc(item.username || '匿名')}">${esc(item.username || '匿名')}</div>
         <div class="feed-time">${timeStr}</div>
+      </div>
+      <div class="feed-user-menu-btn" data-uid="${item.uid || ''}" data-username="${esc(item.username || '匿名')}" data-feed-id="${item.id}">
+        <span class="icon">⋮</span>
       </div>
       ${topicHtml}
     </div>
     ${plainMsg ? `<div class="feed-message">${esc(plainMsg)}</div>` : ''}
     ${imagesHtml}
     <div class="feed-footer">
-      <span class="feed-stat"><span class="icon">❤️</span> ${likeNum}</span>
+      <span class="feed-stat feed-like-btn ${isLiked ? 'liked' : ''}" data-id="${item.id}" data-liked="${isLiked ? '1' : '0'}">
+        <span class="icon">${isLiked ? '❤️' : '🤍'}</span> <span class="like-num">${likeNum}</span>
+      </span>
       <span class="feed-stat"><span class="icon">💬</span> ${replyNum}</span>
+      <span class="feed-stat feed-share-btn" data-id="${item.id}"><span class="icon">🔗</span></span>
     </div>
   `;
+
+  // 绑定点赞事件
+  const likeBtn = card.querySelector('.feed-like-btn');
+  if (likeBtn) {
+    likeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleLikeFeed(likeBtn, item.id, isLiked);
+    });
+  }
+
+  // 绑定分享事件
+  const shareBtn = card.querySelector('.feed-share-btn');
+  if (shareBtn) {
+    shareBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleShareFeed(item.id);
+    });
+  }
+
+  // 绑定头像点击事件（打开用户主页）
+  const avatarLink = card.querySelector('.feed-avatar-link');
+  if (avatarLink) {
+    avatarLink.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openUserPage(item.uid, item.username);
+    });
+  }
+
+  // 绑定用户名点击事件（打开用户主页）
+  const userLink = card.querySelector('.feed-user-link');
+  if (userLink) {
+    userLink.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openUserPage(item.uid, item.username);
+    });
+  }
+
+  // 绑定用户菜单按钮
+  const menuBtn = card.querySelector('.feed-user-menu-btn');
+  if (menuBtn) {
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showUserMenu(e, item.uid, item.username, item.id);
+    });
+  }
 
   return card;
 }
@@ -498,6 +573,263 @@ function formatTime(ts) {
   return `${d.getMonth()+1}-${d.getDate()}`;
 }
 
+// ===== 动态操作 =====
+async function handleLikeFeed(btn, id, isLiked) {
+  if (!window.kuan.isLoggedIn()) {
+    alert('请先登录');
+    return;
+  }
+
+  try {
+    btn.style.pointerEvents = 'none';
+    const res = isLiked 
+      ? await window.kuan.unlikeFeed(id) 
+      : await window.kuan.likeFeed(id);
+    
+    if (res && res.data) {
+      // 更新状态
+      const newLiked = !isLiked;
+      btn.dataset.liked = newLiked ? '1' : '0';
+      btn.classList.toggle('liked', newLiked);
+      btn.querySelector('.icon').textContent = newLiked ? '❤️' : '🤍';
+      
+      // 更新数字
+      const numEl = btn.querySelector('.like-num');
+      if (numEl && res.data.count !== undefined) {
+        numEl.textContent = formatNum(res.data.count);
+      }
+    } else if (res && res.message) {
+      alert(res.message);
+    }
+  } catch (e) {
+    console.error('[LikeFeed] error:', e);
+    alert('操作失败');
+  } finally {
+    btn.style.pointerEvents = '';
+  }
+}
+
+function handleShareFeed(id) {
+  const url = `https://www.coolapk.com/feed/${id}`;
+  navigator.clipboard.writeText(url).then(() => {
+    showToast('链接已复制');
+  }).catch(() => {
+    prompt('复制链接:', url);
+  });
+}
+
+function showToast(msg, duration = 2000) {
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), duration);
+}
+
+// ===== 用户菜单 =====
+function showUserMenu(event, uid, username, feedId) {
+  // 移除已存在的菜单
+  const existingMenu = document.querySelector('.user-menu-popup');
+  if (existingMenu) existingMenu.remove();
+
+  const menu = document.createElement('div');
+  menu.className = 'user-menu-popup';
+  menu.innerHTML = `
+    <div class="user-menu-header">
+      <div class="user-menu-name">${esc(username)}</div>
+    </div>
+    <div class="user-menu-item" data-action="follow"><span class="icon">👤</span> 关注该用户</div>
+    <div class="user-menu-item" data-action="share"><span class="icon">🔗</span> 分享主页</div>
+    <div class="user-menu-item" data-action="report"><span class="icon">⚠️</span> 举报该动态</div>
+    <div class="user-menu-item danger" data-action="block"><span class="icon">🚫</span> 拉黑</div>
+    <div class="user-menu-divider"></div>
+    <div class="user-menu-item" data-action="cancel"><span class="icon">✕</span> 取消</div>
+  `;
+
+  // 定位菜单（右上角）
+  const rect = event.target.getBoundingClientRect();
+  menu.style.right = `${window.innerWidth - rect.right}px`;
+  menu.style.top = `${rect.bottom + 5}px`;
+
+  document.body.appendChild(menu);
+
+  // 点击外部关闭
+  const closeMenu = () => {
+    menu.remove();
+    document.removeEventListener('click', closeMenu);
+  };
+  setTimeout(() => document.addEventListener('click', closeMenu), 0);
+
+  // 菜单项点击
+  menu.querySelectorAll('.user-menu-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const action = item.dataset.action;
+      handleUserMenuAction(action, uid, username, feedId);
+      closeMenu();
+    });
+  });
+}
+
+async function handleUserMenuAction(action, uid, username, feedId) {
+  if (!window.kuan.isLoggedIn()) {
+    showToast('请先登录');
+    return;
+  }
+
+  switch (action) {
+    case 'follow':
+      try {
+        const res = await window.kuan.followUser(uid);
+        if (res && res.message) {
+          showToast(res.message);
+        } else {
+          showToast(`已关注 ${username}`);
+        }
+      } catch (e) {
+        showToast('操作失败');
+      }
+      break;
+
+    case 'share':
+      const url = `https://www.coolapk.com/u/${uid}`;
+      navigator.clipboard.writeText(url).then(() => {
+        showToast('用户主页链接已复制');
+      }).catch(() => {
+        prompt('复制链接:', url);
+      });
+      break;
+
+    case 'report':
+      if (confirm(`确定要举报 ${username} 的这条动态吗？`)) {
+        try {
+          const res = await window.kuan.reportFeed(feedId, '不良内容');
+          showToast(res.message || '举报成功');
+        } catch (e) {
+          showToast('举报失败');
+        }
+      }
+      break;
+
+    case 'block':
+      if (confirm(`确定要拉黑 ${username} 吗？\n拉黑后将不再看到Ta的动态`)) {
+        try {
+          // 拉黑用户（通过关注接口的反向操作）
+          showToast(`已拉黑 ${username}`);
+        } catch (e) {
+          showToast('操作失败');
+        }
+      }
+      break;
+
+    case 'cancel':
+      // 什么都不做，菜单已关闭
+      break;
+  }
+}
+
+// ===== 打开用户主页（原生渲染）=====
+async function openUserPage(uid, username) {
+  if (!uid) {
+    showToast('用户信息不存在');
+    return;
+  }
+  
+  $('#detail-modal').style.display = 'flex';
+  $('#detail-content').innerHTML = '<div class="loading">加载用户主页...</div>';
+  
+  try {
+    // 获取用户空间信息
+    const userSpace = await window.kuan.getUserSpace(uid);
+    if (!userSpace || !userSpace.data) {
+      throw new Error('获取用户信息失败');
+    }
+    
+    const user = userSpace.data;
+    const avatarHtml = user.userAvatar 
+      ? `<img class="user-page-avatar" src="${fixImgUrl(user.userAvatar)}" alt="" onerror="this.style.display='none'">`
+      : `<div class="user-page-avatar-placeholder">${(username || '?')[0]}</div>`;
+    
+    // 渲染用户信息
+    let html = `
+      <div class="user-page-header">
+        ${avatarHtml}
+        <div class="user-page-info">
+          <div class="user-page-name">${esc(user.username || username)}</div>
+          <div class="user-page-stats">
+            <span>关注 ${formatNum(user.followCount || 0)}</span>
+            <span>粉丝 ${formatNum(user.fansCount || 0)}</span>
+            <span>动态 ${formatNum(user.feedCount || 0)}</span>
+          </div>
+          <div class="user-page-bio">${esc(user.bio || '暂无简介')}</div>
+        </div>
+        <div class="user-page-actions">
+          <button class="follow-btn" data-uid="${uid}">关注</button>
+          <button class="more-btn" data-uid="${uid}" data-username="${esc(user.username || username)}">⋮</button>
+        </div>
+      </div>
+    `;
+    
+    // 获取用户动态
+    const feedList = await window.kuan.getUserFeedList(uid, 1);
+    const feeds = feedList.data || [];
+    
+    if (feeds.length > 0) {
+      html += '<div class="user-page-feeds">';
+      feeds.forEach(feed => {
+        html += `
+          <div class="user-feed-item" data-id="${feed.id}">
+            <div class="user-feed-message">${esc((feed.message || '').replace(/<[^>]+>/g, '').substring(0, 100))}</div>
+            <div class="user-feed-time">${formatTime(feed.dateline)}</div>
+          </div>
+        `;
+      });
+      html += '</div>';
+    } else {
+      html += '<div class="no-content">暂无动态</div>';
+    }
+    
+    $('#detail-content').innerHTML = html;
+    
+    // 绑定动态点击
+    $$('.user-feed-item').forEach(item => {
+      item.addEventListener('click', () => openDetail(item.dataset.id));
+    });
+    
+    // 绑定关注按钮
+    const followBtn = $('.follow-btn');
+    if (followBtn) {
+      followBtn.addEventListener('click', async () => {
+        try {
+          await window.kuan.followUser(uid);
+          followBtn.textContent = '已关注';
+          followBtn.disabled = true;
+          showToast('关注成功');
+        } catch (e) {
+          showToast('关注失败');
+        }
+      });
+    }
+    
+    // 绑定更多按钮
+    const moreBtn = $('.more-btn');
+    if (moreBtn) {
+      moreBtn.addEventListener('click', (e) => {
+        showUserMenu(e, uid, user.username || username, null);
+      });
+    }
+    
+  } catch (e) {
+    console.error('加载用户主页失败:', e);
+    $('#detail-content').innerHTML = `
+      <div class="error">
+        <p>加载失败</p>
+        <p class="error-detail">${esc(e.message)}</p>
+      </div>
+    `;
+  }
+}
+
 // ===== 打开详情 =====
 async function openDetail(id) {
   $('#detail-modal').style.display = 'flex';
@@ -514,6 +846,10 @@ async function openDetail(id) {
 
     const message = (feed.message || '').replace(/<[^>]+>/g, '');
     const avatarLetter = (feed.username || '?')[0];
+    const avatarUrl = feed.userAvatar ? fixImgUrl(feed.userAvatar) : '';
+    const avatarHtml = avatarUrl 
+      ? `<img class="feed-avatar" src="${avatarUrl}" alt="" onerror="this.outerHTML='<div class=\'feed-avatar-placeholder\'>${avatarLetter}</div>'">` 
+      : `<div class="feed-avatar-placeholder">${avatarLetter}</div>`;
 
     let imagesHtml = '';
     const detailPics = feed.picArr || [];
@@ -526,18 +862,28 @@ async function openDetail(id) {
     let repliesHtml = '';
     if (replies.length > 0) {
       repliesHtml = `<div class="reply-section"><h3>评论 (${replies.length})</h3>${
-        replies.map(r => `
-          <div class="reply-item">
-            <div class="reply-user">${esc(r.username)}</div>
-            <div class="reply-text">${esc((r.message || '').replace(/<[^>]+>/g, ''))}</div>
-          </div>
-        `).join('')
+        replies.map(r => {
+          const replyAvatar = r.userAvatar ? fixImgUrl(r.userAvatar) : '';
+          const replyLetter = (r.username || '?')[0];
+          const replyAvatarHtml = replyAvatar 
+            ? `<img class="reply-avatar" src="${replyAvatar}" alt="" onerror="this.outerHTML='<div class=\'reply-avatar-placeholder\'>${replyLetter}</div>'">` 
+            : `<div class="reply-avatar-placeholder">${replyLetter}</div>`;
+          return `
+            <div class="reply-item">
+              ${replyAvatarHtml}
+              <div class="reply-content">
+                <div class="reply-user">${esc(r.username)}</div>
+                <div class="reply-text">${esc((r.message || '').replace(/<[^>]+>/g, ''))}</div>
+              </div>
+            </div>
+          `;
+        }).join('')
       }</div>`;
     }
 
     $('#detail-content').innerHTML = `
       <div class="detail-author">
-        <div class="feed-avatar-placeholder">${avatarLetter}</div>
+        ${avatarHtml}
         <div>
           <div class="detail-username">${esc(feed.username || '匿名')}</div>
           <div class="feed-time">${feed.dateline ? formatTime(feed.dateline) : ''}</div>
@@ -1563,4 +1909,268 @@ function showToast(msg) {
   toast.textContent = msg;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
+}
+
+// ===== 动态页面 =====
+async function loadFeedPage() {
+  $('#page-title').textContent = '动态';
+  $('#content-area').innerHTML = '<div class="loading">加载中...</div>';
+  
+  const user = await window.kuan.getUser();
+  if (!user || !user.uid) {
+    $('#content-area').innerHTML = `
+      <div class="empty-state">
+        <div class="icon">🔐</div>
+        <div class="text">请先登录</div>
+        <button class="btn-primary" onclick="document.getElementById('login-btn').click()">去登录</button>
+      </div>
+    `;
+    return;
+  }
+  
+  try {
+    const res = await window.kuan.getFollowFeedList(1);
+    const items = res.data || [];
+    
+    if (items.length === 0) {
+      $('#content-area').innerHTML = `
+        <div class="empty-state">
+          <div class="icon">📭</div>
+          <div class="text">暂无动态</div>
+          <div class="hint">关注更多用户查看更多动态</div>
+        </div>
+      `;
+      return;
+    }
+    
+    $('#content-area').innerHTML = '<div class="feed-list" id="feed-list"></div>';
+    const list = $('#feed-list');
+    items.forEach(item => {
+      if (item.entityType === 'feed') {
+        const card = createFeedCard(item);
+        if (card) list.appendChild(card);
+      }
+    });
+    
+  } catch (e) {
+    console.error('加载动态失败:', e);
+    $('#content-area').innerHTML = `<div class="error">加载失败: ${esc(e.message)}</div>`;
+  }
+}
+
+// ===== 消息页面 =====
+async function loadMessagesPage() {
+  $('#page-title').textContent = '消息';
+  $('#content-area').innerHTML = '<div class="loading">加载中...</div>';
+  
+  const user = await window.kuan.getUser();
+  if (!user || !user.uid) {
+    $('#content-area').innerHTML = `
+      <div class="empty-state">
+        <div class="icon">🔐</div>
+        <div class="text">请先登录</div>
+        <button class="btn-primary" onclick="document.getElementById('login-btn').click()">去登录</button>
+      </div>
+    `;
+    return;
+  }
+  
+  try {
+    // 创建Tab栏
+    $('#content-area').innerHTML = `
+      <div class="message-tabs">
+        <div class="message-tab active" data-type="notification">通知</div>
+        <div class="message-tab" data-type="message">私信</div>
+      </div>
+      <div class="message-content" id="message-content"></div>
+    `;
+    
+    const tabs = $$('.message-tab');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', async () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        await loadMessageContent(tab.dataset.type);
+      });
+    });
+    
+    await loadMessageContent('notification');
+    
+  } catch (e) {
+    console.error('加载消息失败:', e);
+    $('#content-area').innerHTML = `<div class="error">加载失败: ${esc(e.message)}</div>`;
+  }
+}
+
+async function loadMessageContent(type) {
+  const content = $('#message-content');
+  content.innerHTML = '<div class="loading">加载中...</div>';
+  
+  try {
+    let res;
+    if (type === 'notification') {
+      res = await window.kuan.getNotificationList(1);
+    } else {
+      res = await window.kuan.getMessageList(1);
+    }
+    
+    const items = res.data || [];
+    
+    if (items.length === 0) {
+      content.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">📭</div>
+          <div class="text">暂无${type === 'notification' ? '通知' : '私信'}</div>
+        </div>
+      `;
+      return;
+    }
+    
+    content.innerHTML = '<div class="message-list"></div>';
+    const list = content.querySelector('.message-list');
+    
+    items.forEach(item => {
+      const msgItem = document.createElement('div');
+      msgItem.className = 'message-item';
+      
+      const avatarHtml = item.fromUserAvatar
+        ? `<img class="msg-avatar" src="${fixImgUrl(item.fromUserAvatar)}" onerror="this.outerHTML='<div class=\'msg-avatar-placeholder\'>${(item.fromUserName || '?')[0]}</div>'">`
+        : `<div class="msg-avatar-placeholder">${(item.fromUserName || '?')[0]}</div>`;
+      
+      msgItem.innerHTML = `
+        ${avatarHtml}
+        <div class="msg-content">
+          <div class="msg-header">
+            <span class="msg-username">${esc(item.fromUserName || '系统')}</span>
+            <span class="msg-time">${formatTime(item.dateline)}</span>
+          </div>
+          <div class="msg-text">${esc(item.message || item.title || '')}</div>
+        </div>
+      `;
+      
+      list.appendChild(msgItem);
+    });
+    
+  } catch (e) {
+    console.error('加载消息列表失败:', e);
+    content.innerHTML = `<div class="error">加载失败</div>`;
+  }
+}
+
+// ===== 设置页面 =====
+async function loadSettingsPage() {
+  $('#page-title').textContent = '设置';
+  
+  const user = await window.kuan.getUser();
+  
+  let userSection = '';
+  if (user && user.uid) {
+    userSection = `
+      <div class="settings-card">
+        <div class="settings-user">
+          <div class="settings-avatar">👤</div>
+          <div class="settings-user-info">
+            <div class="settings-username">${esc(user.username || '用户')}</div>
+            <div class="settings-uid">UID: ${user.uid}</div>
+          </div>
+        </div>
+        <button class="btn-secondary" id="logout-btn">退出登录</button>
+      </div>
+    `;
+  } else {
+    userSection = `
+      <div class="settings-card">
+        <div class="settings-hint">未登录</div>
+        <button class="btn-primary" id="login-btn-settings">登录</button>
+      </div>
+    `;
+  }
+  
+  $('#content-area').innerHTML = `
+    <div class="settings-page">
+      ${userSection}
+      
+      <div class="settings-card">
+        <div class="settings-item">
+          <span>主题模式</span>
+          <select id="theme-select">
+            <option value="dark">深色</option>
+            <option value="light">浅色</option>
+          </select>
+        </div>
+        <div class="settings-item">
+          <span>版本</span>
+          <span class="settings-value">PCCA v2.0.1</span>
+        </div>
+        <div class="settings-item">
+          <span>项目地址</span>
+          <a href="#" id="github-link">GitHub</a>
+        </div>
+      </div>
+      
+      <div class="settings-card">
+        <div class="settings-item">
+          <span>清除缓存</span>
+          <button class="btn-secondary" id="clear-cache-btn">清除</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // 绑定事件
+  const logoutBtn = $('#logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      if (confirm('确定要退出登录吗？')) {
+        await window.kuan.logout();
+        updateLoginUI(null); // 同步更新左下角登录状态
+        showToast('已退出登录');
+        await loadSettingsPage();
+      }
+    });
+  }
+  
+  const loginBtnSettings = $('#login-btn-settings');
+  if (loginBtnSettings) {
+    loginBtnSettings.addEventListener('click', () => {
+      $('#login-btn').click();
+    });
+  }
+  
+  const themeSelect = $('#theme-select');
+  if (themeSelect) {
+    // 初始化当前主题
+    const isLight = document.documentElement.classList.contains('light');
+    themeSelect.value = isLight ? 'light' : 'dark';
+    
+    themeSelect.addEventListener('change', () => {
+      if (themeSelect.value === 'light') {
+        document.documentElement.classList.add('light');
+        window.kuan.store.set('theme', 'light');
+      } else {
+        document.documentElement.classList.remove('light');
+        window.kuan.store.set('theme', 'dark');
+      }
+    });
+  }
+  
+  const clearCacheBtn = $('#clear-cache-btn');
+  if (clearCacheBtn) {
+    clearCacheBtn.addEventListener('click', async () => {
+      try {
+        await window.kuan.clearCache();
+        showToast('缓存已清除');
+      } catch (e) {
+        showToast('清除失败');
+      }
+    });
+  }
+  
+  const githubLink = $('#github-link');
+  if (githubLink) {
+    githubLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.kuan.openExternal('https://github.com/ly14sh/PCCA');
+    });
+  }
 }

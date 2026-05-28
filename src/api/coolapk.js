@@ -549,6 +549,123 @@ class CoolapkAPI {
   async getTopicFeedList(tag, page = 1, listType = 'lastupdate_desc') {
     return request.call(this, `/v6/topic/tagFeedList?tag=${encodeURIComponent(tag)}&listType=${listType}&page=${page}`);
   }
+
+  // ===== 用户主页 API =====
+
+  // 获取用户空间信息
+  async getUserSpace(uid) {
+    return request.call(this, `/v6/user/space?uid=${uid}`);
+  }
+
+  // 获取用户动态列表
+  async getUserFeedList(uid, page = 1) {
+    return request.call(this, `/v6/user/feedList?uid=${uid}&page=${page}`);
+  }
+
+  // 获取用户回复列表
+  async getUserReplyList(uid, page = 1) {
+    return request.call(this, `/v6/user/replyList?uid=${uid}&page=${page}`);
+  }
+
+  // ===== 动态/消息/通知 API =====
+
+  // 获取我的动态列表
+  async getMyFeedList(page = 1) {
+    return request.call(this, `/v6/user/feedList?page=${page}`);
+  }
+
+  // 获取关注动态
+  async getFollowFeedList(page = 1) {
+    return request.call(this, `/v6/page/dataList?url=/v6/user/followFeedList?page=${page}`);
+  }
+
+  // 获取通知列表
+  async getNotificationList(page = 1) {
+    return request.call(this, `/v6/notification/list?page=${page}`);
+  }
+
+  // 获取消息列表（私信）
+  async getMessageList(page = 1) {
+    return request.call(this, `/v6/message/list?page=${page}`);
+  }
+
+  // 获取未读消息数
+  async getUnreadCount() {
+    return request.call(this, `/v6/notification/getUnreadCount`);
+  }
+
+  // 标记通知已读
+  async readNotification(id) {
+    return request.call(this, `/v6/notification/read?id=${id}`, 'POST');
+  }
+
+  // ===== 动态操作 API =====
+
+  // 点赞动态
+  async likeFeed(id) {
+    return request.call(this, `/v6/feed/like?id=${id}`, 'POST');
+  }
+
+  // 取消点赞
+  async unlikeFeed(id) {
+    return request.call(this, `/v6/feed/unlike?id=${id}`, 'POST');
+  }
+
+  // 点赞评论
+  async likeReply(id) {
+    return request.call(this, `/v6/feed/likeReply?id=${id}`, 'POST');
+  }
+
+  // 取消点赞评论
+  async unlikeReply(id) {
+    return request.call(this, `/v6/feed/unLikeReply?id=${id}`, 'POST');
+  }
+
+  // 关注用户
+  async followUser(uid) {
+    return request.call(this, `/v6/user/follow?uid=${uid}`, 'POST');
+  }
+
+  // 取消关注
+  async unfollowUser(uid) {
+    return request.call(this, `/v6/user/unfollow?uid=${uid}`, 'POST');
+  }
+
+  // 收藏动态（需要登录）
+  async favoriteFeed(id) {
+    return request.call(this, `/v6/feed/favorite?id=${id}`, 'POST');
+  }
+
+  // 举报动态
+  async reportFeed(id, reason = '') {
+    return request.call(this, `/v6/feed/report?id=${id}&reason=${encodeURIComponent(reason)}`, 'POST');
+  }
+
+  // 删除动态（自己的）
+  async deleteFeed(id) {
+    return request.call(this, `/v6/feed/delete?id=${id}`, 'POST');
+  }
+
+  // 发布评论
+  async postReply(id, message, type = 'feed') {
+    const body = new URLSearchParams({ message }).toString();
+    return request.call(this, `/v6/feed/reply?id=${id}&type=${type}`, 'POST', body, {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    });
+  }
+
+  // 获取评论列表（带排序）
+  async getReplyListSorted(id, page = 1, listType = 'lastupdate_desc') {
+    return request.call(this, `/v6/feed/replyList?id=${id}&listType=${listType}&page=${page}&discussMode=1&feedType=feed&blockStatus=0&fromFeedAuthor=0`);
+  }
+
+  // 发布动态
+  async createFeed({ message, picArr = [], topicId = '' }) {
+    const body = new URLSearchParams({ message, picArr: JSON.stringify(picArr), topicId }).toString();
+    return request.call(this, '/v6/feed/createFeed', 'POST', body, {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    });
+  }
 }
 
 module.exports = { CoolapkAPI };
