@@ -50,5 +50,6 @@ contextBridge.exposeInMainWorld('kuan', {
     set: (key, val) => ipcRenderer.invoke('store:set', key, val),
   },
   clearCache: () => ipcRenderer.invoke('clearCache'),
+  resetDeviceCode: () => ipcRenderer.invoke('resetDeviceCode'),
   openExternal: (url) => ipcRenderer.invoke('openExternal', url),
 });

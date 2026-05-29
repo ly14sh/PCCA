@@ -1,7 +1,93 @@
 // ===== 酷安桌面客户端 - 前端逻辑 =====
 
+// ===== 酷安表情映射 =====
+const COOLAPK_EMOJI = {
+  // 经典
+  '受虐滑稽': '😅', '笑哭': '😂', '吃瓜': '🍉', '耐克嘴': '😏',
+  '流泪': '😢', '哈哈': '😄', '滑稽': '😏', '阴险': '😈',
+  '怒': '😡', '酷': '😎', '惊哭': '😱', '大哭': '😭',
+  '偷笑': '🤭', '委屈': '🥺', '疑问': '❓', '吐': '🤮',
+  '黑线': '😑', '鄙视': '😒', '怒骂': '🤬', '打脸': '🤦',
+  '真棒': '👍', '捂脸': '🤦', '笑眼': '😊', '思考': '🤔',
+  '睡觉': '😴', '钱': '💰', '害羞': '😳', '晕': '😵',
+  '怕': '😨', '闭嘴': '🤐', '傻笑': '😁', '生气': '😠',
+  '幻想': '🤩', '吐舌': '😛', '欢呼': '🎉', '无语': '😑',
+  '皱眉': '😟', '机智': '🤓', '开心': '😃', '失望': '😞',
+  '尖叫': '😱', '鼓掌': '👏', '哈欠': '🥱', '再见': '👋',
+  '困': '😪', '冷': '🥶', '热': '🥵', '呆': '😐',
+  '白眼': '🙄', '笑': '😄', '哭': '😢', '怒火': '🔥',
+  '骷髅': '💀', '便便': '💩', '幽灵': '👻', '爱心': '❤️',
+  '心碎': '💔', '星星': '⭐', '太阳': '☀️', '月亮': '🌙',
+  '礼物': '🎁', '彩虹': '🌈', '音乐': '🎵', '点赞': '👍',
+  '踩': '👎', '握手': '🤝', '拳头': '✊', '胜利': '✌️',
+
+  // doge 系列
+  'doge': '🐕', 'dog': '🐕', 'Doge': '🐕',
+  '二哈': '🐺', '柴犬': '🐕', '猫': '🐱', '喵': '🐱',
+
+  // 滑稽变体
+  'cos滑稽': '😏', '滑稽cos': '😏', '受虐': '😅',
+  '托腮滑稽': '😏', '墨镜滑稽': '😎',
+
+  // 情绪
+  '发怒': '😡', '惊讶': '😲', '惊恐': '😱', '惊吓': '😨',
+  '惊讶': '😲', '震惊': '😱', '恐惧': '😨',
+  '撇嘴': '😏', '不屑': '😒', '傲慢': '😤',
+  '得意': '😏', '呲牙': '😁', '咧嘴': '😄',
+  '调皮': '😜', '眨眼': '😉', '亲亲': '😘',
+  '抱抱': '🤗', '握手': '🤝', '击掌': '🙌',
+  '摊手': '🤷', '耸肩': '🤷', '无奈': '😮‍💨',
+
+  // 动作
+  '加油': '💪', '干杯': '🍻', '碰杯': '🥂',
+  '鲜花': '🌹', '送花': '💐', '玫瑰': '🌹',
+  '蛋糕': '🎂', '冰淇淋': '🍦', '咖啡': '☕',
+  '啤酒': '🍺', '可乐': '🥤', '奶茶': '🧋',
+  '炸弹': '💣', '手枪': '🔫', '药丸': '💊',
+  '蜡烛': '🕯️', '灯泡': '💡', '礼物': '🎁',
+
+  // 酷安特色
+  '酷安': '🤖', '基安': '🤖', '机油': '🧑‍🔧',
+  '刷机': '📱', 'Root': '🔓', 'root': '🔓',
+  '安卓': '🤖', 'Android': '🤖',
+  '苹果': '🍎', 'iPhone': '📱', 'iPad': '📱',
+  'Windows': '💻', 'Mac': '💻', 'Linux': '🐧',
+
+  // 其他常见
+  '666': '🔥', '233': '😂', 'awsl': '😍',
+  'xswl': '😂', 'yyds': '👑', '绝绝子': '🔥',
+  '破防': '😭', '泪目': '😢', '蚌埠住了': '😂',
+  '赢麻了': '🏆', '遥遥领先': '🚀',
+  '寄': '💀', 'G': '💀', 'gg': '💀',
+  '草': '🌿', '哈哈哈哈哈': '😂',
+  '好家伙': '😲', '我裂开了': '😭',
+  '有一说一': '☝️', '确实': '✅', '不是': '❌',
+  '急了': '😤', '孝': '🤡', '典': '📖',
+  '绷': '😅', '麻': '😑', '笑死': '😂',
+};
+
+function renderEmoji(text) {
+  if (!window.EMOJI_FILES) return text;
+  return text
+    .replace(/\[([^\]]+)\]/g, (match, name) => {
+      const file = window.EMOJI_FILES[name];
+      if (!file) return match;
+      return `<img class="emoji" src="emoji://${file}" alt="${match}" title="${match}" onerror="this.style.display='none'">`;
+    })
+    .replace(/\(([^)]+)\)/g, (match, name) => {
+      const file = window.EMOJI_FILES[name];
+      if (!file) return match;
+      return `<img class="emoji" src="emoji://${file}" alt="${match}" title="${match}" onerror="this.style.display='none'">`;
+    });
+}
+
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
+
+// 解码 URL 编码的用户名（仅用于显示）
+function decodeUser(str) {
+  try { return decodeURIComponent(str || ''); } catch (e) { return str || ''; }
+}
 
 // ===== 全局状态 =====
 let currentPage = 'home';
@@ -475,7 +561,7 @@ function createFeedCard(item) {
     <div class="feed-header">
       ${avatarHtml}
       <div class="feed-user-info">
-        <div class="feed-username feed-user-link" data-uid="${item.uid || ''}" data-username="${esc(item.username || '匿名')}">${esc(item.username || '匿名')}</div>
+        <div class="feed-username feed-user-link" data-uid="${item.uid || ''}" data-username="${esc(item.username || '匿名')}">${esc(decodeUser(item.username || '匿名'))}</div>
         <div class="feed-time">${timeStr}</div>
       </div>
       <div class="feed-user-menu-btn" data-uid="${item.uid || ''}" data-username="${esc(item.username || '匿名')}" data-feed-id="${item.id}">
@@ -483,7 +569,7 @@ function createFeedCard(item) {
       </div>
       ${topicHtml}
     </div>
-    ${plainMsg ? `<div class="feed-message">${esc(plainMsg)}</div>` : ''}
+    ${plainMsg ? `<div class="feed-message">${renderEmoji(esc(plainMsg))}</div>` : ''}
     ${imagesHtml}
     <div class="feed-footer">
       <span class="feed-stat feed-like-btn ${isLiked ? 'liked' : ''}" data-id="${item.id}" data-liked="${isLiked ? '1' : '0'}">
@@ -636,7 +722,7 @@ function showUserMenu(event, uid, username, feedId) {
   menu.className = 'user-menu-popup';
   menu.innerHTML = `
     <div class="user-menu-header">
-      <div class="user-menu-name">${esc(username)}</div>
+      <div class="user-menu-name">${esc(decodeUser(username))}</div>
     </div>
     <div class="user-menu-item" data-action="follow"><span class="icon">👤</span> 关注该用户</div>
     <div class="user-menu-item" data-action="share"><span class="icon">🔗</span> 分享主页</div>
@@ -831,10 +917,25 @@ async function openUserPage(uid, username) {
 }
 
 // ===== 打开详情 =====
+// 评论状态
+let currentFeedId = null;
+let currentReplyPage = 1;
+let replySortType = 'lastupdate_desc'; // lastupdate_desc | dateline_desc | popular
+let replyingTo = null; // { id, username }
+
 async function openDetail(id) {
+  currentFeedId = id;
+  currentReplyPage = 1;
+  replySortType = 'lastupdate_desc';
+  replyingTo = null;
+  
   $('#detail-modal').style.display = 'flex';
   $('#detail-content').innerHTML = '<div class="loading">加载中...</div>';
-
+  
+  // 显示评论输入框
+  const replyBox = $('#reply-input-box');
+  if (replyBox) replyBox.style.display = 'flex';
+  
   try {
     const [feedRes, replyRes] = await Promise.all([
       window.kuan.getFeedDetail(id),
@@ -859,27 +960,7 @@ async function openDetail(id) {
       ).join('')}</div>`;
     }
 
-    let repliesHtml = '';
-    if (replies.length > 0) {
-      repliesHtml = `<div class="reply-section"><h3>评论 (${replies.length})</h3>${
-        replies.map(r => {
-          const replyAvatar = r.userAvatar ? fixImgUrl(r.userAvatar) : '';
-          const replyLetter = (r.username || '?')[0];
-          const replyAvatarHtml = replyAvatar 
-            ? `<img class="reply-avatar" src="${replyAvatar}" alt="" onerror="this.outerHTML='<div class=\'reply-avatar-placeholder\'>${replyLetter}</div>'">` 
-            : `<div class="reply-avatar-placeholder">${replyLetter}</div>`;
-          return `
-            <div class="reply-item">
-              ${replyAvatarHtml}
-              <div class="reply-content">
-                <div class="reply-user">${esc(r.username)}</div>
-                <div class="reply-text">${esc((r.message || '').replace(/<[^>]+>/g, ''))}</div>
-              </div>
-            </div>
-          `;
-        }).join('')
-      }</div>`;
-    }
+    const repliesHtml = renderReplies(replies);
 
     $('#detail-content').innerHTML = `
       <div class="detail-author">
@@ -890,20 +971,231 @@ async function openDetail(id) {
         </div>
       </div>
       ${feed.title ? `<div class="feed-title">${esc(feed.title)}</div>` : ''}
-      <div class="detail-message">${esc(message)}</div>
+      <div class="detail-message">${renderEmoji(esc(message))}</div>
       ${imagesHtml}
       <div class="feed-footer" style="margin-bottom:16px">
-        <span class="feed-stat"><span class="icon">❤️</span> ${formatNum(feed.likenum || 0)}</span>
+        <span class="feed-stat feed-like-btn" data-id="${id}" data-liked="${feed.userAction?.like ? '1' : '0'}">
+          <span class="icon">${feed.userAction?.like ? '❤️' : '🤍'}</span> ${formatNum(feed.likenum || 0)}
+        </span>
         <span class="feed-stat"><span class="icon">💬</span> ${formatNum(feed.replynum || feed.commentnum || 0)}</span>
       </div>
-      ${repliesHtml}
+      <!-- 评论排序 -->
+      <div class="reply-sort-bar">
+        <span class="reply-sort-label">评论排序：</span>
+        <button class="reply-sort-btn active" data-sort="lastupdate_desc">最新</button>
+        <button class="reply-sort-btn" data-sort="dateline_desc">最早</button>
+        <button class="reply-sort-btn" data-sort="popular">最热</button>
+      </div>
+      <div id="reply-list-container">${repliesHtml}</div>
+      <div id="reply-load-more" class="load-more-btn" style="display:${replies.length >= 20 ? 'block' : 'none'}">
+        <button id="reply-load-more-btn">加载更多评论</button>
+      </div>
     `;
 
     if (detailPics.length > 0) {
       bindImageClick($('#detail-content'), detailPics);
     }
+    
+    // 绑定评论区事件
+    bindReplyEvents();
   } catch (err) {
     $('#detail-content').innerHTML = '<div class="empty-state"><div class="icon">⚠️</div><div class="text">加载失败</div></div>';
+  }
+}
+
+// 渲染评论列表
+function renderReplies(replies) {
+  if (!replies || replies.length === 0) {
+    return '<div class="empty-state"><div class="icon">💬</div><div class="text">暂无评论</div></div>';
+  }
+  
+  return `<div class="reply-section">${replies.map(r => {
+    const replyAvatar = r.userAvatar ? fixImgUrl(r.userAvatar) : '';
+    const replyLetter = (r.username || '?')[0];
+    const replyAvatarHtml = replyAvatar 
+      ? `<img class="reply-avatar" src="${replyAvatar}" alt="" onerror="this.outerHTML='<div class=\'reply-avatar-placeholder\'>${replyLetter}</div>'">` 
+      : `<div class="reply-avatar-placeholder">${replyLetter}</div>`;
+    
+    const isLiked = r.userAction?.like;
+    const replyMessage = (r.message || '').replace(/<[^>]+>/g, '');
+    
+    return `
+      <div class="reply-item">
+        ${replyAvatarHtml}
+        <div class="reply-content">
+          <div class="reply-header">
+            <span class="reply-user">${esc(r.username)}</span>
+            <span class="reply-time">${r.dateline ? formatTime(r.dateline) : ''}</span>
+          </div>
+          <div class="reply-text">${renderEmoji(esc(replyMessage))}</div>
+          <div class="reply-actions">
+            <span class="reply-action-btn reply-like-btn" data-id="${r.id}" data-liked="${isLiked ? '1' : '0'}">
+              ${isLiked ? '❤️' : '🤍'} ${formatNum(r.likenum || 0)}
+            </span>
+            <span class="reply-action-btn reply-reply-btn" data-id="${r.id}" data-user="${esc(r.username)}">
+              💬 回复
+            </span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('')}</div>`;
+}
+
+// 绑定评论区事件
+function bindReplyEvents() {
+  // 评论排序按钮
+  $$('.reply-sort-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      $$('.reply-sort-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      replySortType = btn.dataset.sort;
+      currentReplyPage = 1;
+      
+      const container = $('#reply-list-container');
+      container.innerHTML = '<div class="loading">加载中...</div>';
+      
+      try {
+        const res = await window.kuan.getReplyListSorted(currentFeedId, 1, replySortType);
+        container.innerHTML = renderReplies(res.data || []);
+        bindReplyItemEvents();
+        
+        // 更新加载更多按钮
+        const loadMore = $('#reply-load-more');
+        if (loadMore) loadMore.style.display = (res.data || []).length >= 20 ? 'block' : 'none';
+      } catch (err) {
+        container.innerHTML = '<div class="empty-state">加载失败</div>';
+      }
+    });
+  });
+  
+  bindReplyItemEvents();
+  
+  // 加载更多评论按钮
+  const loadMoreBtn = $('#reply-load-more-btn');
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener('click', loadMoreReplies);
+  }
+  
+  // 评论输入框
+  const replyInput = $('#reply-input');
+  const replySubmitBtn = $('#reply-submit-btn');
+  
+  if (replyInput) {
+    replyInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submitReply();
+    });
+  }
+  
+  if (replySubmitBtn) {
+    replySubmitBtn.addEventListener('click', submitReply);
+  }
+}
+
+// 绑定评论项事件（点赞、回复）
+function bindReplyItemEvents() {
+  // 评论点赞
+  $$('.reply-like-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const isLiked = btn.dataset.liked === '1';
+      
+      try {
+        if (isLiked) {
+          await window.kuan.unlikeReply(id);
+          btn.dataset.liked = '0';
+          btn.innerHTML = btn.innerHTML.replace('❤️', '🤍');
+        } else {
+          await window.kuan.likeReply(id);
+          btn.dataset.liked = '1';
+          btn.innerHTML = btn.innerHTML.replace('🤍', '❤️');
+        }
+      } catch (err) {
+        showToast('操作失败');
+      }
+    });
+  });
+  
+  // 回复按钮
+  $$('.reply-reply-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const replyId = btn.dataset.id;
+      const username = btn.dataset.user;
+      replyingTo = { id: replyId, username };
+      
+      const replyInput = $('#reply-input');
+      if (replyInput) {
+        replyInput.placeholder = `回复 @${username}...`;
+        replyInput.focus();
+      }
+    });
+  });
+}
+
+// 提交评论
+async function submitReply() {
+  showToast('评论功能维护中，暂时不可用');
+  return;
+  
+  const replyInput = $('#reply-input');
+  console.log('[Reply] Input element:', replyInput);
+  console.log('[Reply] Input value:', replyInput?.value);
+  console.log('[Reply] Current feed ID:', currentFeedId);
+  
+  if (!replyInput || !replyInput.value.trim()) {
+    showToast('请输入评论内容');
+    return;
+  }
+  
+  const message = replyingTo 
+    ? `回复 @${replyingTo.username}：${replyInput.value.trim()}`
+    : replyInput.value.trim();
+  
+  try {
+    const res = await window.kuan.postReply(currentFeedId, message);
+    if (res && res.data) {
+      showToast('评论成功！');
+      replyInput.value = '';
+      replyingTo = null;
+      replyInput.placeholder = '写评论...';
+      
+      // 刷新评论列表
+      const container = $('#reply-list-container');
+      const listRes = await window.kuan.getReplyListSorted(currentFeedId, 1, replySortType);
+      container.innerHTML = renderReplies(listRes.data || []);
+      bindReplyItemEvents();
+    } else {
+      showToast(res?.message || '评论失败');
+    }
+  } catch (err) {
+    showToast('评论失败：' + err.message);
+  }
+}
+
+// 加载更多评论
+async function loadMoreReplies() {
+  currentReplyPage++;
+  
+  try {
+    const res = await window.kuan.getReplyListSorted(currentFeedId, currentReplyPage, replySortType);
+    const newReplies = res.data || [];
+    
+    if (newReplies.length > 0) {
+      const container = $('#reply-list-container');
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = renderReplies(newReplies);
+      
+      // 追加新评论
+      const newItems = tempDiv.querySelectorAll('.reply-item');
+      newItems.forEach(item => container.appendChild(item));
+      bindReplyItemEvents();
+    }
+    
+    // 隐藏加载更多按钮
+    const loadMore = $('#reply-load-more');
+    if (loadMore) loadMore.style.display = newReplies.length >= 20 ? 'block' : 'none';
+  } catch (err) {
+    showToast('加载失败');
   }
 }
 
@@ -1789,7 +2081,7 @@ function updateLoginUI(user) {
   const label = btn.querySelector('.nav-label');
   const icon = btn.querySelector('.nav-icon');
   if (label) {
-    label.textContent = user.username;
+    label.textContent = decodeUser(user.username);
     label.title = '已登录 · 点击退出';
   }
   if (icon) icon.textContent = '👤';
@@ -2070,7 +2362,7 @@ async function loadSettingsPage() {
         <div class="settings-user">
           <div class="settings-avatar">👤</div>
           <div class="settings-user-info">
-            <div class="settings-username">${esc(user.username || '用户')}</div>
+            <div class="settings-username">${esc(decodeUser(user.username || '用户'))}</div>
             <div class="settings-uid">UID: ${user.uid}</div>
           </div>
         </div>
@@ -2100,7 +2392,7 @@ async function loadSettingsPage() {
         </div>
         <div class="settings-item">
           <span>版本</span>
-          <span class="settings-value">PCCA v2.0.1</span>
+          <span class="settings-value">PCCA v2.0.3</span>
         </div>
         <div class="settings-item">
           <span>项目地址</span>
@@ -2112,6 +2404,10 @@ async function loadSettingsPage() {
         <div class="settings-item">
           <span>清除缓存</span>
           <button class="btn-secondary" id="clear-cache-btn">清除</button>
+        </div>
+        <div class="settings-item">
+          <span>重置设备码</span>
+          <button class="btn-secondary" id="reset-device-btn">重置</button>
         </div>
       </div>
     </div>
@@ -2162,6 +2458,19 @@ async function loadSettingsPage() {
         showToast('缓存已清除');
       } catch (e) {
         showToast('清除失败');
+      }
+    });
+  }
+  
+  const resetDeviceBtn = $('#reset-device-btn');
+  if (resetDeviceBtn) {
+    resetDeviceBtn.addEventListener('click', async () => {
+      if (confirm('重置设备码后需要重新登录，确定继续？')) {
+        await window.kuan.resetDeviceCode();
+        await window.kuan.logout();
+        updateLoginUI(null);
+        showToast('设备码已重置，请重新登录');
+        await loadSettingsPage();
       }
     });
   }

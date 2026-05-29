@@ -316,6 +316,11 @@ ipcMain.handle('clearCache', async () => {
   return { success: true };
 });
 
+ipcMain.handle('resetDeviceCode', async () => {
+  api.resetDeviceCode();
+  return { success: true };
+});
+
 ipcMain.handle('openExternal', async (_, url) => {
   shell.openExternal(url);
 });
@@ -351,6 +356,13 @@ app.whenReady().then(async () => {
   // 先恢复 Session Cookie
   await restoreSessionCookies();
   
+  // 注册自定义协议：emoji:// 加载本地表情图片
+  protocol.handle('emoji', (request) => {
+    const fileName = decodeURIComponent(request.url.replace('emoji://', ''));
+    const filePath = path.join(__dirname, 'src', 'renderer', 'emoji', fileName);
+    return net.fetch('file:///' + filePath.replace(/\\/g, '/'));
+  });
+
   // 注册自定义协议：coolapk-img:// 代理图片请求
   protocol.handle('coolapk-img', (request) => {
     const realUrl = request.url.replace('coolapk-img://', 'https://');

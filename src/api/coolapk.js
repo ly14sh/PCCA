@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const https = require('https');
 const bcrypt = require('bcryptjs');
+const FormData = require('form-data');
 
 const BASE_URL = 'https://api.coolapk.com';
 const ACCOUNT_URL = 'https://account.coolapk.com';
@@ -116,20 +117,26 @@ function buildHeaders(extra = {}) {
   return headers;
 }
 
-function request(path, method = 'GET', body = null, useCookies = true) {
+function request(path, method = 'GET', body = null, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(BASE_URL + path);
-    const headers = buildHeaders();
+    const headers = buildHeaders(extraHeaders);
 
     if (body) {
-      body = typeof body === 'string' ? body : JSON.stringify(body);
-      headers['Content-Type'] = 'application/x-www-form-urlencoded';
-      headers['Content-Length'] = Buffer.byteLength(body);
+      if (Buffer.isBuffer(body)) {
+        headers['Content-Length'] = body.length;
+      } else if (extraHeaders['Content-Type'] === 'application/json') {
+        body = JSON.stringify(body);
+        headers['Content-Length'] = Buffer.byteLength(body);
+      } else {
+        body = typeof body === 'string' ? body : JSON.stringify(body);
+        headers['Content-Type'] = headers['Content-Type'] || 'application/x-www-form-urlencoded';
+        headers['Content-Length'] = Buffer.byteLength(body);
+      }
     }
 
-    // 登录状态：带 token cookie
     // 登录状态：带 token 和 SESSID cookie
-    if (useCookies && this && this.cookies) {
+    if (this && this.cookies) {
       const parts = [];
       if (this.cookies.token) parts.push(`token=${this.cookies.token}`);
       if (this.cookies.SESSID) parts.push(`SESSID=${this.cookies.SESSID}`);
@@ -138,8 +145,11 @@ function request(path, method = 'GET', body = null, useCookies = true) {
       if (parts.length > 0) headers['Cookie'] = parts.join('; ');
     }
 
+    console.log('[API REQUEST]', method, url.href);
+    console.log('[API HEADERS]', JSON.stringify(headers, null, 2));
+    if (body) console.log('[API BODY]', typeof body === 'string' ? body : JSON.stringify(body));
+
     const req = https.request(url.href, { method, headers }, (res) => {
-      // 记录 Set-Cookie
       const setCookie = res.headers['set-cookie'];
       if (setCookie && this && this.cookies) {
         setCookie.forEach(c => {
@@ -151,9 +161,11 @@ function request(path, method = 'GET', body = null, useCookies = true) {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
+        console.log('[API RESPONSE]', res.statusCode, url.pathname);
+        console.log('[API RESP BODY]', data.substring(0, 500));
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           const loc = new URL(res.headers.location, BASE_URL);
-          resolve(request.call(this, loc.pathname + loc.search, method, body, useCookies));
+          resolve(request.call(this, loc.pathname + loc.search, method, body, extraHeaders));
           return;
         }
         try {
@@ -165,7 +177,10 @@ function request(path, method = 'GET', body = null, useCookies = true) {
       });
     });
 
-    req.on('error', reject);
+    req.on('error', (e) => {
+      console.error('[API ERROR]', method, url.href, e.message);
+      reject(e);
+    });
     if (body) req.write(body);
     req.end();
   });
@@ -173,10 +188,24 @@ function request(path, method = 'GET', body = null, useCookies = true) {
 
 class CoolapkAPI {
   constructor(store = null) {
-    _deviceCode = createDeviceCode();
-    console.log('Device code:', _deviceCode);
     this.store = store;
     this.cookies = {};
+
+    // 持久化 device code，避免每次重启生成新的导致 token 失效
+    if (store) {
+      let savedCode = store.get('deviceCode', null);
+      if (!savedCode) {
+        savedCode = createDeviceCode();
+        store.set('deviceCode', savedCode);
+        console.log('[DeviceCode] Generated new:', savedCode);
+      } else {
+        console.log('[DeviceCode] Restored:', savedCode);
+      }
+      _deviceCode = savedCode;
+    } else {
+      _deviceCode = createDeviceCode();
+      console.log('[DeviceCode] No store, generated:', _deviceCode);
+    }
 
     // 启动时加载已保存的登录状态
     if (store) {
@@ -384,6 +413,17 @@ class CoolapkAPI {
   // 验证登录状态（调用 /v6/account/checkLoginInfo）
   async checkLoginInfo() {
     return request.call(this, '/v6/account/checkLoginInfo');
+  }
+
+  // 重置 device code（需要重新登录）
+  resetDeviceCode() {
+    const newCode = createDeviceCode();
+    _deviceCode = newCode;
+    if (this.store) {
+      this.store.set('deviceCode', newCode);
+    }
+    console.log('[DeviceCode] Reset to:', newCode);
+    return newCode;
   }
 
   async logout(session) {
@@ -646,11 +686,13 @@ class CoolapkAPI {
     return request.call(this, `/v6/feed/delete?id=${id}`, 'POST');
   }
 
-  // 发布评论
+  // 发布评论（multipart/form-data，参考 Coolapk-Lite）
   async postReply(id, message, type = 'feed') {
-    const body = new URLSearchParams({ message }).toString();
-    return request.call(this, `/v6/feed/reply?id=${id}&type=${type}`, 'POST', body, {
-      'Content-Type': 'application/x-www-form-urlencoded',
+    const form = new FormData();
+    form.append('message', message);
+    form.append('pic', '');
+    return request.call(this, `/v6/feed/reply?id=${id}&type=${type}`, 'POST', form.getBuffer(), {
+      'Content-Type': form.getHeaders()['content-type'],
     });
   }
 

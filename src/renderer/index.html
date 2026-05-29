@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src http: https: data: coolapk-img:; style-src 'self' 'unsafe-inline'; font-src https:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src http: https: data: coolapk-img: emoji:; style-src 'self' 'unsafe-inline'; font-src https:;">
   <title>酷安</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -83,6 +83,11 @@
           <div class="modal-title">动态详情</div>
         </div>
         <div class="modal-body" id="detail-content"></div>
+        <!-- 评论输入框 -->
+        <div class="reply-input-box" id="reply-input-box" style="display:none">
+          <input type="text" id="reply-input" placeholder="写评论..." />
+          <button id="reply-submit-btn">发送</button>
+        </div>
       </div>
     </div>
 
@@ -102,6 +107,7 @@
       </div>
     </div>
   </div>
+  <script src="emoji-files.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
