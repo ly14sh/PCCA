@@ -16,10 +16,11 @@
       "mirror": "https://npmmirror.com/mirrors/electron/"
     },
     "directories": {
-      "output": "dist"
+      "output": "release"
     },
     "files": [
       "electron/**/*",
+      "src/api/**/*",
       "dist/**/*",
       "package.json"
     ],
