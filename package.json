@@ -1,0 +1,59 @@
+{
+  "name": "pcca",
+  "version": "3.0.0",
+  "description": "PCCA - 酷安第三方桌面客户端",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently -n vite,electron \"vite\" \"electron .\"",
+    "build": "vite build && electron-builder",
+    "build:win": "vite build && electron-builder --win",
+    "preview": "vite preview"
+  },
+  "build": {
+    "appId": "com.pcca.desktop",
+    "productName": "PCCA",
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "compression": "maximum",
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "PCCA-Portable-${version}.${ext}"
+    }
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "electron-store": "^8.1.0",
+    "form-data": "^4.0.5",
+    "node-fetch": "^2.7.0",
+    "pinia": "^3.0.2",
+    "vue": "^3.5.16",
+    "vue-router": "^4.5.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.4",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.1.2",
+    "electron": "^37.0.0",
+    "electron-builder": "^26.0.0",
+    "postcss": "^8.5.4",
+    "tailwindcss": "^3.4.17",
+    "vite": "^6.3.5"
+  }
+}
