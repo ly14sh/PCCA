@@ -8,7 +8,7 @@ import AppTopBar from './AppTopBar.vue'
     <!-- 侧边栏 -->
     <AppSidebar />
     <!-- 主内容区 -->
-    <div class="flex-1 flex flex-col overflow-hidden">
+    <div class="main-content flex-1 flex flex-col overflow-hidden">
       <AppTopBar />
       <main class="flex-1 overflow-y-auto" style="background: var(--bg-primary)">
         <router-view v-slot="{ Component }">
@@ -20,3 +20,19 @@ import AppTopBar from './AppTopBar.vue'
     </div>
   </div>
 </template>
+
+<style scoped>
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.main-content main {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  padding: 20px;
+}
+</style>
