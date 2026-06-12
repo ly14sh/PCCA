@@ -91,11 +91,12 @@ const plainMessage = (props.item.message || '').replace(/<[^>]+>/g, '').trim()
 .feed-card {
   background: var(--bg-card);
   border-radius: var(--radius-lg);
-  padding: 16px;
-  margin-bottom: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
   border: 1px solid var(--border);
   cursor: pointer;
   transition: border-color 0.15s ease;
+  box-shadow: var(--shadow-sm);
 }
 
 .feed-card:hover {
@@ -110,8 +111,8 @@ const plainMessage = (props.item.message || '').replace(/<[^>]+>/g, '').trim()
 }
 
 .feed-avatar {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   overflow: hidden;
   background: var(--bg-tertiary);
@@ -139,7 +140,7 @@ const plainMessage = (props.item.message || '').replace(/<[^>]+>/g, '').trim()
 }
 
 .feed-username {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
   cursor: pointer;
@@ -150,7 +151,7 @@ const plainMessage = (props.item.message || '').replace(/<[^>]+>/g, '').trim()
 }
 
 .feed-time {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   margin-top: 2px;
 }
@@ -184,7 +185,7 @@ const plainMessage = (props.item.message || '').replace(/<[^>]+>/g, '').trim()
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .feed-images.cols-1 { grid-template-columns: 1fr; max-width: 400px; }
