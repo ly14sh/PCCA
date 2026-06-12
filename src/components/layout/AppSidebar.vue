@@ -116,7 +116,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 20px;
+  padding: 12px 16px;
   color: var(--text-secondary);
   text-decoration: none;
   font-size: 14px;
@@ -127,6 +127,8 @@ onMounted(async () => {
   width: 100%;
   cursor: pointer;
   text-align: left;
+  border-radius: var(--radius);
+  margin: 2px 8px;
 }
 
 .nav-item:hover {
