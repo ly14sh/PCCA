@@ -142,10 +142,7 @@ onMounted(loadDetail)
 
 <template>
   <div class="detail-page">
-    <div class="top-bar">
-      <button class="back-btn" @click="router.back()">← 返回</button>
-      <span class="page-title">动态详情</span>
-    </div>
+    <button class="back-float" @click="router.back()" title="返回">←</button>
     <!-- 加载中 -->
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
@@ -287,33 +284,31 @@ onMounted(loadDetail)
   padding-bottom: 80px;
 }
 
-.top-bar {
+.back-float {
+  position: fixed;
+  top: 72px;
+  left: calc(var(--sidebar-width) + 20px);
+  z-index: 100;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: var(--accent);
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3), 0 0 0 4px var(--bg-primary);
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
+  justify-content: center;
 }
 
-.back-btn {
-  background: var(--bg-tertiary);
-  border: none;
-  color: var(--text-secondary);
-  padding: 6px 14px;
-  border-radius: var(--radius);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.back-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.page-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
+.back-float:hover {
+  background: var(--accent);
+  color: white;
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4), 0 0 0 4px var(--bg-primary);
 }
 
 .loading-state {

@@ -1,0 +1,75 @@
+<h2>内容卡片设计</h2>
+<p class="subtitle">扁平化风格的Feed卡片，简洁现代</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">当前设计</div>
+    <div class="mockup-body">
+      <div style="background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+          <div style="width: 40px; height: 40px; border-radius: 50%; background: #f0f0f0;"></div>
+          <div>
+            <div style="font-weight: 600; font-size: 14px;">用户名</div>
+            <div style="font-size: 12px; color: #999;">2小时前</div>
+          </div>
+        </div>
+        <div style="font-size: 14px; line-height: 1.6; margin-bottom: 12px;">
+          这是一条动态内容，展示扁平化设计的效果。
+        </div>
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <div style="flex: 1; height: 100px; background: #f5f5f5; border-radius: 4px;"></div>
+          <div style="flex: 1; height: 100px; background: #f5f5f5; border-radius: 4px;"></div>
+        </div>
+        <div style="display: flex; gap: 16px; color: #666; font-size: 12px;">
+          <span>👍 12</span>
+          <span>💬 3</span>
+          <span>↗️ 分享</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="mockup">
+    <div class="mockup-header">扁平化新设计</div>
+    <div class="mockup-body">
+      <div style="background: white; border-radius: 12px; padding: 20px; margin: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+          <div style="width: 44px; height: 44px; border-radius: 50%; background: #e9ecef;"></div>
+          <div>
+            <div style="font-weight: 600; font-size: 15px;">用户名</div>
+            <div style="font-size: 13px; color: #6c757d;">2小时前</div>
+          </div>
+        </div>
+        <div style="font-size: 15px; line-height: 1.6; margin-bottom: 16px; color: #212529;">
+          这是一条动态内容，展示扁平化设计的效果。
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px;">
+          <div style="height: 120px; background: #f8f9fa; border-radius: 8px;"></div>
+          <div style="height: 120px; background: #f8f9fa; border-radius: 8px;"></div>
+        </div>
+        <div style="display: flex; gap: 20px; color: #6c757d; font-size: 13px;">
+          <span style="cursor: pointer;">👍 12</span>
+          <span style="cursor: pointer;">💬 3</span>
+          <span style="cursor: pointer;">↗️ 分享</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="card-approve" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content">
+      <h3>批准卡片设计</h3>
+      <p>卡片设计符合扁平化风格要求</p>
+    </div>
+  </div>
+  <div class="option" data-choice="card-modify" onclick="toggleSelect(this)">
+    <div class="letter">✎</div>
+    <div class="content">
+      <h3>需要调整</h3>
+      <p>我想调整卡片设计的某些方面</p>
+    </div>
+  </div>
+</div>
