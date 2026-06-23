@@ -202,7 +202,7 @@ onMounted(loadSettings)
       <h3 class="card-title">ℹ️ 关于</h3>
       <div class="setting-item">
         <span class="setting-label">版本</span>
-        <span class="setting-value">PCCA v2.0.4</span>
+        <span class="setting-value">PCCA v3.0.4</span>
       </div>
       <div class="setting-item">
         <span class="setting-label">技术栈</span>
